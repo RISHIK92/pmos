@@ -15,15 +15,11 @@ import {
 } from "react-native";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SidebarContext } from "./_layout";
-import Animated, {
-  FadeInUp,
-  FadeInDown,
-  Layout,
-} from "react-native-reanimated";
+import Animated, { FadeInUp, FadeInDown } from "react-native-reanimated";
+import { useRouter } from "expo-router";
 
 // Types
 type Period = "Daily" | "Weekly" | "Monthly";
-type StatType = "steps" | "hr" | "sleep";
 
 // Mock Data
 const HEALTH_METRICS = [
@@ -33,8 +29,8 @@ const HEALTH_METRICS = [
     value: "8,432",
     subValue: "/ 10,000",
     icon: "figure.walk",
-    color: "#0984E3",
-    bg: "#E1F5FE",
+    color: "#000",
+    bg: "transparent",
   },
   {
     id: "hr",
@@ -42,8 +38,8 @@ const HEALTH_METRICS = [
     value: "72",
     subValue: "bpm",
     icon: "heart.fill",
-    color: "#FF5252",
-    bg: "#FFEBEE",
+    color: "#000",
+    bg: "transparent",
   },
   {
     id: "sleep",
@@ -51,10 +47,46 @@ const HEALTH_METRICS = [
     value: "7h 12m",
     subValue: "Avg",
     icon: "moon.fill",
-    color: "#6C5CE7",
-    bg: "#F1F2F6",
+    color: "#000",
+    bg: "transparent",
   },
 ];
+
+const ALL_METRICS_CONFIG: Record<
+  string,
+  { label: string; icon: string; color: string; bg: string }
+> = {
+  steps: {
+    label: "Steps",
+    icon: "figure.walk",
+    color: "#000",
+    bg: "transparent",
+  },
+  hr: {
+    label: "Heart Rate",
+    icon: "heart.fill",
+    color: "#000",
+    bg: "transparent",
+  },
+  sleep: {
+    label: "Sleep",
+    icon: "moon.fill",
+    color: "#000",
+    bg: "transparent",
+  },
+  activity: {
+    label: "Activity",
+    icon: "flame.fill",
+    color: "#000",
+    bg: "transparent",
+  },
+  hydration: {
+    label: "Hydration",
+    icon: "drop.fill",
+    color: "#000",
+    bg: "transparent",
+  },
+};
 
 const DETAIL_DATA: Record<
   string,
@@ -103,6 +135,34 @@ const DETAIL_DATA: Record<
       values: [0.85, 0.9, 0.8, 0.85],
     },
   },
+  activity: {
+    Daily: {
+      labels: ["6am", "12pm", "6pm", "10pm"],
+      values: [0.2, 0.6, 0.8, 0.3],
+    },
+    Weekly: {
+      labels: ["M", "T", "W", "T", "F", "S", "S"],
+      values: [0.4, 0.7, 0.5, 0.9, 0.8, 0.6, 0.5],
+    },
+    Monthly: {
+      labels: ["W1", "W2", "W3", "W4"],
+      values: [0.6, 0.75, 0.8, 0.7],
+    },
+  },
+  hydration: {
+    Daily: {
+      labels: ["8am", "12", "4pm", "8pm"],
+      values: [0.2, 0.5, 0.7, 0.9],
+    },
+    Weekly: {
+      labels: ["M", "T", "W", "T", "F", "S", "S"],
+      values: [0.8, 0.6, 0.9, 0.7, 0.85, 0.6, 0.7],
+    },
+    Monthly: {
+      labels: ["W1", "W2", "W3", "W4"],
+      values: [0.75, 0.8, 0.7, 0.85],
+    },
+  },
 };
 
 const WEEKLY_TRENDS = [
@@ -116,9 +176,9 @@ const WEEKLY_TRENDS = [
 ];
 
 export default function HealthScreen() {
+  const router = useRouter();
   const { toggleSidebar } = useContext(SidebarContext);
   const [waterCount, setWaterCount] = useState(4);
-  const [inputText, setInputText] = useState("");
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>("Daily");
 
@@ -132,12 +192,14 @@ export default function HealthScreen() {
     if (metricId === "steps") return ["10k", "8k", "6k", "4k", "2k"];
     if (metricId === "hr") return ["150", "120", "90", "60", "40"];
     if (metricId === "sleep") return ["10h", "8h", "6h", "4h", "2h"];
+    if (metricId === "activity") return ["500", "400", "300", "200", "100"]; // Calories
+    if (metricId === "hydration") return ["2.5L", "2L", "1.5L", "1L", "0.5L"];
     return ["100", "80", "60", "40", "20"];
   };
 
   const renderDetailModal = () => {
     if (!selectedStat) return null;
-    const metric = HEALTH_METRICS.find((m) => m.id === selectedStat);
+    const metric = ALL_METRICS_CONFIG[selectedStat];
     if (!metric) return null;
     const data = DETAIL_DATA[selectedStat][period];
     const yLabels = getYAxisLabels(selectedStat);
@@ -254,14 +316,6 @@ export default function HealthScreen() {
               <IconSymbol name="line.3.horizontal" size={24} color="#2D3436" />
             </TouchableOpacity>
           </View>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Health</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.menuButton}>
-              <IconSymbol name="plus" size={20} color="#2D3436" />
-            </TouchableOpacity>
-          </View>
         </View>
       </SafeAreaView>
 
@@ -292,11 +346,11 @@ export default function HealthScreen() {
                 >
                   <IconSymbol
                     name={metric.icon as any}
-                    size={18}
+                    size={24}
                     color={metric.color}
                   />
                 </View>
-                <View>
+                <View style={{ alignItems: "center" }}>
                   <Text style={styles.metricValue}>{metric.value}</Text>
                   <Text style={styles.metricLabel}>{metric.label}</Text>
                 </View>
@@ -307,7 +361,15 @@ export default function HealthScreen() {
 
         {/* Hydration Tracker */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Hydration</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Hydration</Text>
+            <TouchableOpacity
+              onPress={() => openDetail("hydration")}
+              style={styles.expandBtn}
+            >
+              <IconSymbol name="chevron.right" size={20} color="#B2BEC3" />
+            </TouchableOpacity>
+          </View>
           <View style={styles.hydrationCard}>
             <View style={styles.hydrationInfo}>
               <Text style={styles.waterValue}>{waterCount * 250}ml</Text>
@@ -325,63 +387,78 @@ export default function HealthScreen() {
                 <Text style={styles.cupCount}>{waterCount}</Text>
               </View>
               <TouchableOpacity
-                style={[styles.waterBtn, styles.waterBtnAdd]}
+                style={styles.waterBtn}
                 onPress={() => setWaterCount(waterCount + 1)}
               >
-                <IconSymbol name="plus" size={20} color="#FFF" />
+                <IconSymbol name="plus" size={20} color="#000" />
               </TouchableOpacity>
             </View>
           </View>
         </View>
 
-        {/* Weekly Insights */}
+        {/* Nutrition Section */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Activity Trend</Text>
-          <View style={styles.trendCard}>
-            <View style={styles.graphContainer}>
-              {WEEKLY_TRENDS.map((day, index) => (
-                <View key={index} style={styles.barGroup}>
-                  <View style={[styles.barObj, { height: 100 * day.val }]} />
-                  <Text style={styles.dayLabel}>{day.day}</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={styles.trendSummary}>
-              You've been{" "}
-              <Text style={{ fontWeight: "700", color: "#00B894" }}>12%</Text>{" "}
-              more active this week.
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* AI Health Assistant Input */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.inputOuterContainer}
-      >
-        <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <IconSymbol
-              name="sparkles"
-              size={20}
-              color="#6C5CE7"
-              style={{ marginLeft: 4 }}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Log a meal or ask AI..."
-              placeholderTextColor="#999"
-              value={inputText}
-              onChangeText={setInputText}
-              selectionColor="#6C5CE7"
-            />
-            <TouchableOpacity style={styles.micBtn}>
-              <IconSymbol name="mic.fill" size={18} color="#636E72" />
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Nutrition</Text>
+            <TouchableOpacity
+              onPress={() => router.push("/nutrition")}
+              style={styles.expandBtn}
+            >
+              <IconSymbol name="chevron.right" size={20} color="#B2BEC3" />
             </TouchableOpacity>
           </View>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.nutritionCard}
+            onPress={() => router.push("/nutrition")}
+          >
+            <View style={styles.nutritionInfo}>
+              <View style={styles.nutritionRow}>
+                <IconSymbol name="flame.fill" size={24} color="#FF7675" />
+                <Text style={styles.nutritionValue}>1,350</Text>
+                <Text style={styles.nutritionSub}>/ 2,000 kcal</Text>
+              </View>
+              <View style={styles.nutritionBarBg}>
+                <View style={[styles.nutritionBarFill, { width: "67%" }]} />
+              </View>
+              <Text style={styles.nutritionFooter}>3 meals logged today</Text>
+            </View>
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+
+        {/* Weekly Insights */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Activity Trend</Text>
+            <TouchableOpacity
+              onPress={() => openDetail("activity")}
+              style={styles.expandBtn}
+            >
+              <IconSymbol name="chevron.right" size={20} color="#B2BEC3" />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => openDetail("activity")}
+          >
+            <View style={styles.trendCard}>
+              <View style={styles.graphContainer}>
+                {WEEKLY_TRENDS.map((day, index) => (
+                  <View key={index} style={styles.barGroup}>
+                    <View style={[styles.barObj, { height: 100 * day.val }]} />
+                    <Text style={styles.dayLabel}>{day.day}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.trendSummary}>
+                You've been{" "}
+                <Text style={{ fontWeight: "700", color: "#00B894" }}>12%</Text>{" "}
+                more active this week.
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -394,103 +471,90 @@ const styles = StyleSheet.create({
   headerContainer: {
     backgroundColor: "#FFFFFF",
     zIndex: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
+    paddingTop: Platform.OS === "android" ? 30 : 0,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
   },
+  headerLeft: { flex: 1, alignItems: "flex-start" },
+  headerRight: { flex: 1, alignItems: "flex-end" },
   menuButton: {
     padding: 8,
-    paddingVertical: 14,
-  },
-  headerLeft: {
-    flex: 1,
-    alignItems: "flex-start",
-  },
-  headerCenter: {
-    flex: 2,
-    alignItems: "center",
-  },
-  headerRight: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#2D3436",
+    paddingTop: 10,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 100,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
   pageIntro: {
-    marginBottom: 32,
+    marginBottom: 40,
   },
   pageTitle: {
     fontSize: 32,
     fontWeight: "800",
-    color: "#2D3436",
-    marginBottom: 8,
+    color: "#000",
+    marginBottom: 4,
     letterSpacing: -1,
   },
   pageSubtitle: {
     fontSize: 16,
-    color: "#636E72",
+    color: "#B2BEC3",
     fontWeight: "500",
   },
+
+  // Minimal Metrics
   metricsGrid: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 40,
+    marginBottom: 48,
   },
   metricCard: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.02)",
-    gap: 12,
-    minHeight: 120, // Ensure tap target is big enough
+    alignItems: "center",
+    gap: 8,
   },
   iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
+    marginTop: 4,
   },
   metricValue: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: "700",
-    color: "#2D3436",
+    color: "#000",
   },
   metricLabel: {
     fontSize: 12,
     fontWeight: "600",
     color: "#B2BEC3",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
+
+  // Sections
   sectionContainer: {
-    marginBottom: 40,
+    marginBottom: 48,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#2D3436",
-    marginBottom: 16,
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#000",
   },
+  expandBtn: {
+    padding: 4,
+  },
+
+  // Minimal Hydration
   hydrationCard: {
-    backgroundColor: "#F8F9FA",
-    borderRadius: 24,
-    padding: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -499,14 +563,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   waterValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "800",
     color: "#0984E3",
   },
   waterLabel: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 13,
     color: "#B2BEC3",
+    fontWeight: "500",
   },
   waterControls: {
     flexDirection: "row",
@@ -514,80 +578,105 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   waterBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.05)",
-  },
-  waterBtnAdd: {
-    backgroundColor: "#0984E3",
-    borderColor: "#0984E3",
+    padding: 8,
   },
   dropletsObj: {
     alignItems: "center",
+    justifyContent: "center",
+    width: 40,
   },
   cupCount: {
-    fontSize: 12,
+    fontSize: 18,
+    color: "#000",
     fontWeight: "700",
-    color: "#0984E3",
-    marginTop: -2,
   },
+
+  // Minimal Nutrition
+  nutritionCard: {
+    gap: 16,
+  },
+  nutritionInfo: {
+    gap: 12, // Fixed: Added nutritionInfo style which was missing
+  },
+  nutritionRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+    marginBottom: 8,
+  },
+  nutritionValue: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#000",
+  },
+  nutritionSub: {
+    fontSize: 14,
+    color: "#B2BEC3",
+    fontWeight: "500",
+  },
+  nutritionBarBg: {
+    height: 4,
+    backgroundColor: "#F1F2F6",
+    borderRadius: 2,
+    width: "100%",
+  },
+  nutritionBarFill: {
+    height: "100%",
+    backgroundColor: "#000",
+    borderRadius: 2,
+  },
+  nutritionFooter: {
+    marginTop: 8,
+    fontSize: 13,
+    color: "#636E72",
+    fontWeight: "500",
+  },
+
+  // Minimal Trends
   trendCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
     padding: 0,
   },
   graphContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    height: 120,
+    height: 100,
     marginBottom: 16,
   },
   barGroup: {
     alignItems: "center",
     gap: 8,
+    width: 20,
   },
   barObj: {
-    width: 8,
-    borderRadius: 4,
-    backgroundColor: "#00B894",
-    opacity: 0.8,
+    width: 4, // Thinner bars
+    borderRadius: 2,
+    backgroundColor: "#000",
   },
   dayLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
-    color: "#B2BEC3",
+    color: "#DFE6E9",
   },
   trendSummary: {
     fontSize: 14,
     color: "#636E72",
-    textAlign: "center",
-    fontStyle: "italic",
+    fontWeight: "500",
   },
 
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    padding: 24,
-    paddingBottom: 40,
-    minHeight: "60%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 20,
+    padding: 32,
+    paddingBottom: 48,
+    minHeight: "50%",
   },
   modalHeader: {
     flexDirection: "row",
@@ -602,37 +691,33 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 24,
-    fontWeight: "800",
-    color: "#2D3436",
+    fontWeight: "700",
+    color: "#000",
   },
   closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
     backgroundColor: "#F5F6FA",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
   periodSelector: {
     flexDirection: "row",
-    backgroundColor: "#F5F6FA",
-    borderRadius: 16,
-    padding: 4,
     marginBottom: 32,
+    gap: 16,
+    paddingLeft: 24,
   },
   periodTab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   periodTabActive: {
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
+    borderColor: "#000",
+    backgroundColor: "#000",
   },
   periodText: {
     fontSize: 14,
@@ -640,7 +725,7 @@ const styles = StyleSheet.create({
     color: "#B2BEC3",
   },
   periodTextActive: {
-    color: "#2D3436",
+    color: "#FFF",
   },
   alertBox: {
     flexDirection: "row",
@@ -649,7 +734,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     gap: 12,
-    marginBottom: 44,
+    marginBottom: 32,
   },
   alertText: {
     flex: 1,
@@ -658,81 +743,45 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   chartWrapper: {
-    flexDirection: "row",
-    height: 220,
-    alignItems: "flex-end",
+    marginTop: 10,
   },
   yAxisContainer: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 20,
     justifyContent: "space-between",
-    height: 200, // Match chart bar height max + some padding if needed
-    paddingBottom: 24, // Align bottom label with bottom of chart axis
-    paddingRight: 12,
-    marginRight: 4,
   },
   yAxisLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: "#B2BEC3",
-    fontWeight: "600",
-    textAlign: "right",
   },
   chartContainer: {
-    flex: 1,
+    marginLeft: 30,
     flexDirection: "row",
     justifyContent: "space-between",
+    height: 200,
     alignItems: "flex-end",
-    height: 220,
   },
   chartBarGroup: {
     alignItems: "center",
-    gap: 12,
+    gap: 8,
     flex: 1,
   },
   chartBarWrapper: {
-    width: 16,
-    height: 200,
-    backgroundColor: "transparent", // Remove background to let bars float or keep if guided
+    height: "100%",
     justifyContent: "flex-end",
-    overflow: "visible", // Changed to visible for better shadow? No, hidden for bar rounding.
+    width: 6,
+    backgroundColor: "#F5F6FA",
+    borderRadius: 3,
   },
   chartBar: {
     width: "100%",
-    borderRadius: 8,
+    borderRadius: 3,
   },
   chartLabel: {
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: 10,
     color: "#B2BEC3",
-  },
-
-  // Input
-  inputOuterContainer: {
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
-  },
-  inputContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === "ios" ? 32 : 16,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F8F9FA",
-    borderRadius: 32,
-    paddingHorizontal: 16,
-    height: 52,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.05)",
-    gap: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: "#2D3436",
-    fontWeight: "500",
-  },
-  micBtn: {
-    padding: 4,
+    fontWeight: "600",
   },
 });

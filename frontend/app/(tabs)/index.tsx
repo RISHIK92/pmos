@@ -11,7 +11,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Modal,
+  Alert,
+  Linking,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SidebarContext } from "./_layout";
 import Animated, {
@@ -21,7 +25,10 @@ import Animated, {
   withSpring,
   Layout,
   FadeIn,
+  withRepeat,
 } from "react-native-reanimated";
+import { Audio } from "expo-av";
+import { shareAsync } from "expo-sharing";
 import { TypingIndicator } from "@/components/ui/TypingIndicator";
 
 const { width } = Dimensions.get("window");
@@ -34,6 +41,36 @@ type Message = {
   timestamp: string;
   sources?: string[];
 };
+
+const INITIAL_NOTIFICATIONS = [
+  {
+    id: "1",
+    title: "System Update",
+    message: "PMOS v2.1 is now available. Tap to install.",
+    time: "2m ago",
+    read: false,
+    icon: "hardware-chip",
+    color: "#00B894",
+  },
+  {
+    id: "2",
+    title: "New Task Assigned",
+    message: "Project 'Alpha' needs your review.",
+    time: "1h ago",
+    read: false,
+    icon: "checkbox",
+    color: "#0984E3",
+  },
+  {
+    id: "3",
+    title: "Memory Optimized",
+    message: "Freed up 1.2GB of space automatically.",
+    time: "3h ago",
+    read: true,
+    icon: "flash",
+    color: "#FDCB6E",
+  },
+];
 
 const INITIAL_MESSAGES: Message[] = [
   {
@@ -57,6 +94,77 @@ export default function ChatScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const { toggleSidebar } = useContext(SidebarContext);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [isRecording, setIsRecording] = useState(false);
+
+  // Shared value MUST be defined before useAnimatedStyle
+  const recordingScale = useSharedValue(1);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+
+  const recordingIndicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: recordingScale.value }],
+  }));
+
+  const startRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (permission.status === "granted") {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+
+        const { recording } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
+
+        setRecording(recording);
+        setIsRecording(true);
+
+        recordingScale.value = withRepeat(
+          withSpring(1.2, { duration: 1000 }),
+          -1,
+          true
+        );
+      } else {
+        Alert.alert(
+          "Permission Required",
+          "Microphone access is needed to record voice notes. Please enable it in settings.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Open Settings",
+              onPress: () => Linking.openSettings(),
+            },
+          ]
+        );
+      }
+    } catch (err) {
+      console.error("Failed to start recording", err);
+    }
+  };
+
+  const stopRecording = async () => {
+    setIsRecording(false);
+    recordingScale.value = withSpring(1);
+
+    if (!recording) return;
+
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+
+      if (uri) {
+        await shareAsync(uri);
+        // Still mock the text response for chat flow continuity
+        // setInputText("Show me the memory usage trends for this week.");
+      }
+    } catch (error) {
+      console.error("Failed to stop recording", error);
+    }
+  };
 
   const sendMessage = () => {
     if (!inputText.trim()) return;
@@ -80,13 +188,13 @@ export default function ChatScreen() {
       setIsTyping(false);
       const response: Message = {
         id: (Date.now() + 1).toString(),
-        text: "I've analyzed the request. Based on current system parameters, this configuration is optimal. Would you like me to deploy these changes to the staging environment?",
+        text: "I've pulled the memory usage data. Average daily usage is down by 15% following the 'Garbage Collection' optimization run yesterday. Peak usage remains under 2GB.",
         sender: "system",
         timestamp: new Date().toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
         }),
-        sources: ["Config Log", "System Health"],
+        sources: ["Memory Log", "Performance Monitor"],
       };
       setMessages((prev) => [...prev, response]);
     }, 2000);
@@ -167,6 +275,7 @@ export default function ChatScreen() {
 
   return (
     <View style={styles.container}>
+      {/* ... (Header and FlatList) */}
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Modern Header */}
@@ -178,13 +287,15 @@ export default function ChatScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>New Thread</Text>
-          </View>
-
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.menuButton}>
-              <IconSymbol name="plus" size={20} color="#2D3436" />
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={() => setShowNotifications(true)}
+            >
+              <IconSymbol name="bell.fill" size={20} color="#000" />
+              {notifications.some((n) => !n.read) && (
+                <View style={styles.badge} />
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -220,29 +331,72 @@ export default function ChatScreen() {
       >
         <View style={styles.inputContainer}>
           <View style={styles.inputWrapper}>
-            <TouchableOpacity style={styles.attachBtn}>
-              <IconSymbol name="plus" size={20} color="#636E72" />
-            </TouchableOpacity>
-            <TextInput
-              style={styles.input}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Ask anything..."
-              placeholderTextColor="#999"
-              selectionColor="#00B894"
-              multiline
-            />
+            {isRecording ? (
+              <View
+                style={[
+                  styles.input,
+                  { flexDirection: "row", alignItems: "center", gap: 12 },
+                ]}
+              >
+                <Animated.View
+                  style={[
+                    {
+                      width: 10,
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: "#FF7675",
+                    },
+                    recordingIndicatorStyle,
+                  ]}
+                />
+                <Text style={{ color: "#636E72", fontWeight: "500" }}>
+                  Listening...
+                </Text>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.attachBtn}>
+                  <IconSymbol name="plus" size={20} color="#636E72" />
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.input}
+                  value={inputText}
+                  onChangeText={setInputText}
+                  placeholder="Ask anything..."
+                  placeholderTextColor="#999"
+                  selectionColor="#00B894"
+                  multiline
+                />
+              </>
+            )}
             <TouchableOpacity
-              onPress={inputText.length > 0 ? sendMessage : () => {}}
+              onPress={() => {
+                if (inputText.length > 0) {
+                  sendMessage();
+                } else {
+                  if (isRecording) stopRecording();
+                  else startRecording();
+                }
+              }}
               style={[
                 styles.sendButton,
-                inputText.length > 0 && styles.sendButtonActive,
+                (inputText.length > 0 || isRecording) &&
+                  styles.sendButtonActive,
+                isRecording && { backgroundColor: "#FF7675" },
               ]}
             >
               <IconSymbol
-                name={inputText.length > 0 ? "arrow.up.right" : "mic.fill"}
+                name={
+                  inputText.length > 0
+                    ? "arrow.up.right"
+                    : isRecording
+                    ? "xmark"
+                    : "mic.fill"
+                }
                 size={18}
-                color={inputText.length > 0 ? "#FFFFFF" : "#636E72"}
+                color={
+                  inputText.length > 0 || isRecording ? "#FFFFFF" : "#636E72"
+                }
               />
             </TouchableOpacity>
           </View>
@@ -251,6 +405,71 @@ export default function ChatScreen() {
           </Text>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Notifications Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showNotifications}
+        onRequestClose={() => setShowNotifications(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowNotifications(false)}
+            activeOpacity={1}
+          />
+          <Animated.View style={styles.notificationModal}>
+            <View style={styles.notifHeader}>
+              <Text style={styles.notifTitle}>Notifications</Text>
+              <TouchableOpacity onPress={() => setShowNotifications(false)}>
+                <Ionicons name="close-circle" size={24} color="#B2BEC3" />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={notifications}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.notifList}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.notifItem,
+                    !item.read && styles.notifItemUnread,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.notifIcon,
+                      { backgroundColor: item.color + "15" },
+                    ]}
+                  >
+                    <Ionicons
+                      name={item.icon as any}
+                      size={20}
+                      color={item.color}
+                    />
+                  </View>
+                  <View style={styles.notifContent}>
+                    <View style={styles.notifTopRow}>
+                      <Text style={styles.notifItemTitle}>{item.title}</Text>
+                      <Text style={styles.notifTime}>{item.time}</Text>
+                    </View>
+                    <Text style={styles.notifMessage} numberOfLines={2}>
+                      {item.message}
+                    </Text>
+                  </View>
+                  {!item.read && <View style={styles.unreadDot} />}
+                </TouchableOpacity>
+              )}
+            />
+
+            <TouchableOpacity style={styles.markReadBtn}>
+              <Text style={styles.markReadText}>Mark all as read</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -275,7 +494,7 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 8,
-    paddingVertical: 14,
+    paddingTop: 30,
   },
   headerLeft: {
     flex: 1,
@@ -455,5 +674,111 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 11,
     color: "#B2BEC3",
+  },
+  badge: {
+    position: "absolute",
+    top: 14,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#FF7675",
+    borderWidth: 1.5,
+    borderColor: "#FFF",
+  },
+  // Notification Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-start",
+    paddingTop: 60, // below header roughly
+    paddingHorizontal: 16,
+  },
+  notificationModal: {
+    backgroundColor: "#FFF",
+    borderRadius: 24,
+    maxHeight: "60%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+    overflow: "hidden",
+  },
+  notifHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F2F6",
+  },
+  notifTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#2D3436",
+  },
+  notifList: {
+    padding: 0,
+  },
+  notifItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F2F6",
+  },
+  notifItemUnread: {
+    backgroundColor: "#F8F9FA",
+  },
+  notifIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    paddingTop: 30,
+  },
+  notifContent: {
+    flex: 1,
+  },
+  notifTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  notifItemTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#2D3436",
+  },
+  notifTime: {
+    fontSize: 11,
+    color: "#B2BEC3",
+    fontWeight: "500",
+  },
+  notifMessage: {
+    fontSize: 13,
+    color: "#636E72",
+    lineHeight: 18,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#0984E3",
+    marginLeft: 8,
+  },
+  markReadBtn: {
+    padding: 16,
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#F1F2F6",
+  },
+  markReadText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0984E3",
   },
 });

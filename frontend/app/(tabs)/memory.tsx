@@ -164,9 +164,6 @@ export default function MemoryScreen() {
               <IconSymbol name="line.3.horizontal" size={24} color="#2D3436" />
             </TouchableOpacity>
           </View>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Memory</Text>
-          </View>
           <View style={styles.headerRight}>
             <TouchableOpacity
               style={styles.menuButton}
@@ -201,12 +198,6 @@ export default function MemoryScreen() {
       >
         <View style={styles.inputContainer}>
           <View style={styles.inputWrapper}>
-            <IconSymbol
-              name="magnifyingglass"
-              size={20}
-              color="#636E72"
-              style={{ marginLeft: 4 }}
-            />
             <TextInput
               style={styles.input}
               placeholder="Search memories..."
@@ -305,7 +296,7 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 8,
-    paddingVertical: 14,
+    paddingTop: 30,
   },
   headerLeft: {
     flex: 1,

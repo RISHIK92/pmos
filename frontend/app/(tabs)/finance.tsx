@@ -397,9 +397,6 @@ export default function FinanceScreen() {
             <IconSymbol name="line.3.horizontal" size={24} color="#000" />
           </TouchableOpacity>
           <View style={{ flex: 1 }} />
-          <TouchableOpacity style={styles.navButton}>
-            <IconSymbol name="bell.fill" size={20} color="#000" />
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
 
@@ -499,7 +496,7 @@ const styles = StyleSheet.create({
   },
   navButton: {
     padding: 8,
-    paddingVertical: 14,
+    paddingTop: 30,
   },
   listContent: {
     paddingBottom: 40,

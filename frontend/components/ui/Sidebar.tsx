@@ -161,6 +161,16 @@ export function Sidebar({ isOpen, onClose, children }: SidebarProps) {
               onPress={() => navigateTo("/(tabs)/health")}
             />
             <MenuItem
+              icon={
+                pathname.includes("nutrition")
+                  ? "nutrition"
+                  : "nutrition-outline"
+              }
+              label="Diet"
+              isActive={pathname === "/nutrition"}
+              onPress={() => navigateTo("/nutrition")} // Navigates to the stacked nutrition page
+            />
+            <MenuItem
               icon={pathname.includes("finance") ? "wallet" : "wallet-outline"}
               label="Finance"
               isActive={
@@ -255,7 +265,7 @@ const styles = StyleSheet.create({
   },
   sidebarHeader: {
     padding: 24,
-    paddingTop: 32,
+    paddingTop: 48,
     marginBottom: 8,
     flexDirection: "row",
     alignItems: "center",

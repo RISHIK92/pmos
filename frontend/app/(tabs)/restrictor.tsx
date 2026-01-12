@@ -248,12 +248,6 @@ export default function RestrictorScreen() {
             <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
               <IconSymbol name="line.3.horizontal" size={24} color="#1A1A1A" />
             </TouchableOpacity>
-            <View style={styles.titleContainer}>
-              <Text style={styles.headerTitle}>Focus</Text>
-            </View>
-            <TouchableOpacity style={styles.menuButton}>
-              <IconSymbol name="plus" size={20} color="#1A1A1A" />
-            </TouchableOpacity>
           </View>
         </SafeAreaView>
 
@@ -615,6 +609,7 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 8,
+    paddingTop: 30,
     borderRadius: 12,
   },
   titleContainer: {

@@ -40,7 +40,7 @@ const INTEGRATIONS = [
   },
   {
     id: "3",
-    name: "Notion",
+    name: "Slack",
     icon: "pencil", // FontAwesome
     color: "#000000",
     bg: "#FFF",
@@ -113,9 +113,6 @@ export default function ConfigScreen() {
               <IconSymbol name="line.3.horizontal" size={24} color="#2D3436" />
             </TouchableOpacity>
           </View>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>CONFIG</Text>
-          </View>
           <View style={styles.headerRight}>
             <TouchableOpacity style={styles.menuButton}>
               <Ionicons name="settings-outline" size={22} color="#2D3436" />
@@ -145,7 +142,6 @@ export default function ConfigScreen() {
             <View style={styles.onlineBadge} />
           </View>
           <Text style={styles.profileName}>Rishik C. Karuturi</Text>
-          <Text style={styles.profileEmail}>PMOS Administrator</Text>
 
           <TouchableOpacity style={styles.editProfileBtn}>
             <Text style={styles.editProfileText}>Edit Profile</Text>
@@ -279,7 +275,7 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 8,
-    paddingVertical: 14,
+    paddingTop: 30,
   },
   headerLeft: {
     flex: 1,
@@ -356,7 +352,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "700",
     color: "#2D3436",
-    marginBottom: 4,
+    marginBottom: 8,
   },
   profileEmail: {
     fontSize: 14,

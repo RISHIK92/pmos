@@ -31,6 +31,7 @@ export default function AppLayout() {
           <Stack.Screen name="content" />
           <Stack.Screen name="restrictor" />
           <Stack.Screen name="config" />
+          <Stack.Screen name="nutrition" />
           {/* Add other screens here if needed */}
         </Stack>
       </Sidebar>

@@ -126,9 +126,6 @@ export default function TasksScreen() {
               <IconSymbol name="line.3.horizontal" size={24} color="#2D3436" />
             </TouchableOpacity>
           </View>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Tasks</Text>
-          </View>
           <View style={styles.headerRight}>
             <TouchableOpacity
               style={styles.menuButton}
@@ -344,7 +341,7 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 8,
-    paddingVertical: 14,
+    paddingTop: 30,
   },
   headerLeft: {
     flex: 1,
