@@ -18,6 +18,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SidebarContext } from "./_layout";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged, User } from "firebase/auth";
+import GoogleLogin from "@/components/GoogleLogin";
+import LoginModal from "@/components/LoginModal";
 import Animated, {
   FadeInUp,
   useAnimatedStyle,
@@ -98,9 +102,45 @@ export default function ChatScreen() {
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [isRecording, setIsRecording] = useState(false);
 
-  // Shared value MUST be defined before useAnimatedStyle
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
   const recordingScale = useSharedValue(1);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
+
+  const [user, setUser] = useState<User | null>(null);
+  const [initializing, setInitializing] = useState(true);
+
+  // Handle user state changes - Updated for Firebase JS SDK
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setUser(user);
+      if (initializing) setInitializing(false);
+
+      if (user) {
+        try {
+          const token = await user.getIdToken();
+
+          const backendUrl =
+            Platform.OS === "android"
+              ? "http://10.0.2.2:8000"
+              : "http://localhost:8000";
+
+          await fetch(`${backendUrl}/auth/register`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({}),
+          });
+        } catch (err) {
+          console.error("Backend sync failed", err);
+        }
+      }
+    });
+
+    return unsubscribe; // unsubscribe on unmount
+  }, [initializing]);
 
   const recordingIndicatorStyle = useAnimatedStyle(() => ({
     transform: [{ scale: recordingScale.value }],
@@ -168,6 +208,11 @@ export default function ChatScreen() {
 
   const sendMessage = () => {
     if (!inputText.trim()) return;
+
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
 
     const newMessage: Message = {
       id: Date.now().toString(),
@@ -400,6 +445,13 @@ export default function ChatScreen() {
               />
             </TouchableOpacity>
           </View>
+
+          {!user && !initializing && (
+            <View style={styles.loginContainer}>
+              <GoogleLogin />
+            </View>
+          )}
+
           <Text style={styles.footerNote}>
             PMOS can make mistakes. Verify important info.
           </Text>
@@ -470,6 +522,14 @@ export default function ChatScreen() {
           </Animated.View>
         </View>
       </Modal>
+
+      <LoginModal
+        visible={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onLoginSuccess={() => {
+          // Optional: You can do extra actions here if needed
+        }}
+      />
     </View>
   );
 }
@@ -640,6 +700,10 @@ const styles = StyleSheet.create({
     minHeight: 56,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.05)",
+  },
+  loginContainer: {
+    marginTop: 12,
+    alignItems: "center",
   },
   attachBtn: {
     width: 36,

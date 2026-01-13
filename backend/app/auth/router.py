@@ -1,16 +1,13 @@
+from fastapi.param_functions import Depends
 from fastapi import APIRouter
-from auth.schema import RegisterRequest, RegisterResponse, LoginRequest, LoginResponse
-from auth.controller import AuthController
+from app.auth.schema import RegisterResponse
+from app.auth.controller import AuthController
+from common.security import verify_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 controller = AuthController()
 
 @router.post("/register", response_model=RegisterResponse)
-async def register(request: RegisterRequest):
-    registerUser = await controller.register(request)
+async def register(user_data: dict = Depends(verify_token)):
+    registerUser = await controller.register(user_data)
     return registerUser
-
-@router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest):
-    loginUser = await controller.login(request)
-    return loginUser

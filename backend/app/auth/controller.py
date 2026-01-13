@@ -1,13 +1,9 @@
-from auth.schema import RegisterRequest, RegisterResponse, LoginRequest, LoginResponse
-from auth.service import AuthService
+from app.auth.schema import RegisterResponse
+from app.auth.service import AuthService
 
 service = AuthService()
 
 class AuthController:
-    async def register(self, request: RegisterRequest):
-        registerUser = await service.register(request)
+    async def register(self, userData: dict):
+        registerUser = await service.register(uid= userData.uid, email= userData.email)
         return registerUser
-
-    async def login(self, request: LoginRequest):
-        loginUser = await service.login(request)
-        return loginUser

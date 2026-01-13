@@ -1,0 +1,29 @@
+import os
+import firebase_admin
+from firebase_admin import credentials, auth
+
+def initialize_firebase():
+    if firebase_admin._apps:
+        return
+    
+    project_id = os.getenv("FIREBASE_PROJECT_ID")
+    client_email = os.getenv("FIREBASE_CLIENT_EMAIL")
+    private_key = os.getenv("FIREBASE_PRIVATE_KEY")
+    
+    if not all([project_id, client_email, private_key]):
+        raise ValueError("Missing Firebase service account environment variables")
+    
+    private_key = private_key.replace("\\n", "\n")
+    
+    cred = credentials.Certificate({
+        "type": "service_account",
+        "project_id": project_id,
+        "client_email": client_email,
+        "private_key": private_key,
+        "token_uri": "https://oauth2.googleapis.com/token"
+    })
+    
+    firebase_admin.initialize_app(cred)
+    print("✅ Firebase Admin initialized")
+
+__all__ = ["initialize_firebase", "auth"]

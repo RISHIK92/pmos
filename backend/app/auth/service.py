@@ -1,23 +1,23 @@
-from certifi.core import where
-from auth.schema import RegisterRequest, RegisterResponse, LoginRequest, LoginResponse
-from db import db
+import jwt
+from app.auth.schema import RegisterRequest, RegisterResponse
+from services.db import db
 
 class AuthService:
-    async def register(self, request: RegisterRequest):
-        user = await db.user.create(
-            data={
-                "email": request.email,
-            }
-        )
-        return RegisterResponse(message=user.id)
-
-    async def login(self, request: LoginRequest):
-        user = await db.user.find_unique(
+    async def register(self, uid: str, email: str):
+        existingUser = await db.user.find_unique(
             where={
-                "email": request.email
+                "id": uid,
             }
         )
-        if user:
-            return LoginResponse(message=user.id)
-        else:
-            return LoginResponse(message="User not found.")
+
+        if existingUser:
+            return RegisterResponse(message="Login Successful", status=200)
+
+        if not existingUser:
+            await db.user.create(
+                data={
+                    "id": uid,
+                    "email": email,
+                }
+        )
+        return RegisterResponse(message="Login Successful", status=200)
