@@ -1,9 +1,10 @@
+from db import lifespan
 from fastapi import FastAPI
-from app.auth.router import router as auth_router
+from auth.router import router
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
-@app.include_router(auth_router)
+app.include_router(router)
 
 @app.get("/")
 def root():
