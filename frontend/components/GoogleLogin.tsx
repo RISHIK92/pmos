@@ -12,6 +12,9 @@ WebBrowser.maybeCompleteAuthSession();
 const WEB_CLIENT_ID =
   "259162332596-1n34g91i5e7qte51e7kcdote5k9f2va5.apps.googleusercontent.com";
 
+const ANDROID_CLIENT_ID =
+  "259162332596-j0ar6u1aetfvtfpe06mqqp1u0vev937q.apps.googleusercontent.com";
+
 interface GoogleLoginProps {
   onLoginSuccess?: () => void;
 }
@@ -20,9 +23,9 @@ export default function GoogleLogin({ onLoginSuccess }: GoogleLoginProps) {
   const [request, response, promptAsync] = Google.useAuthRequest({
     // We use the same client ID for now, as we only have the Web Client ID from google-services.json.
     // Ideally, you should generate native iOS/Android Client IDs in Google Cloud Console for better native CX.
-    androidClientId: WEB_CLIENT_ID,
-    iosClientId: WEB_CLIENT_ID,
+    androidClientId: ANDROID_CLIENT_ID,
     webClientId: WEB_CLIENT_ID,
+    redirectUri: "com.rishik.pmos:/oauth2redirect",
   });
 
   useEffect(() => {
