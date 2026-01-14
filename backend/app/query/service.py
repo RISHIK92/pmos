@@ -2,6 +2,7 @@ from fastapi import UploadFile
 from services.db import db
 import os
 from pathlib import Path
+from services.transcribe import voice_to_text
 
 class QueryService:
     def __init__(self):
@@ -21,7 +22,7 @@ class QueryService:
         return str(temp_path)
     
     async def voice_query(self, temp_path: str):
-        transcribed_text = transcribe_and_translate(temp_path)
+        transcribed_text = voice_to_text(temp_path)
 
         if os.path.exists(temp_path):
             os.remove(temp_path)

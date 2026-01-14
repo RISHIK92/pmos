@@ -6,4 +6,3 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     response: str
-    status: int

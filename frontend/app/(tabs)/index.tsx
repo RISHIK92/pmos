@@ -83,8 +83,10 @@ export default function ChatScreen() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [isRecording, setIsRecording] = useState(false);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
 
   const recordingScale = useSharedValue(1);
+  const processingScale = useSharedValue(1);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
 
   const [user, setUser] = useState<User | null>(null);
@@ -125,6 +127,11 @@ export default function ChatScreen() {
     transform: [{ scale: recordingScale.value }],
   }));
 
+  const processingIndicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: processingScale.value }],
+    opacity: processingScale.value > 1 ? 0.7 : 1,
+  }));
+
   const startRecording = async () => {
     try {
       const permission = await Audio.requestPermissionsAsync();
@@ -142,7 +149,7 @@ export default function ChatScreen() {
         setIsRecording(true);
 
         recordingScale.value = withRepeat(
-          withSpring(1.2, { duration: 1000 }),
+          withSpring(1.6, { duration: 600 }),
           -1,
           true
         );
@@ -175,7 +182,15 @@ export default function ChatScreen() {
       const uri = recording.getURI();
       setRecording(null);
 
-      if (uri && user) {
+      if (uri) {
+        // Start processing animation
+        setIsProcessingVoice(true);
+        processingScale.value = withRepeat(
+          withSpring(1.4, { duration: 600 }),
+          -1,
+          true
+        );
+
         const formData = new FormData();
 
         formData.append("file", {
@@ -184,27 +199,30 @@ export default function ChatScreen() {
           type: "audio/m4a",
         } as any);
 
-        const token = await user.getIdToken();
         const backendUrl =
           Platform.OS === "android"
-            ? "http://10.111.69.129:8000"
+            ? "http://10.0.2.2:8000"
             : "http://localhost:8000";
 
         const response = await fetch(`${backendUrl}/query/voice`, {
           method: "POST",
           body: formData,
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: {},
         });
         const result = await response.json();
+
+        // Stop processing animation
+        setIsProcessingVoice(false);
+        processingScale.value = withSpring(1);
+
         if (result) {
           setInputText(result);
         }
       }
     } catch (error) {
       console.error("Failed to stop recording", error);
+      setIsProcessingVoice(false);
+      processingScale.value = withSpring(1);
     }
   };
 
@@ -445,6 +463,52 @@ export default function ChatScreen() {
                     Listening...
                   </Text>
                 </View>
+              ) : isProcessingVoice ? (
+                <View
+                  style={[
+                    styles.input,
+                    { flexDirection: "row", alignItems: "center", gap: 12 },
+                  ]}
+                >
+                  <View style={{ flexDirection: "row", gap: 4 }}>
+                    <Animated.View
+                      style={[
+                        {
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: "#0984E3",
+                        },
+                        processingIndicatorStyle,
+                      ]}
+                    />
+                    <Animated.View
+                      style={[
+                        {
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: "#0984E3",
+                        },
+                        processingIndicatorStyle,
+                      ]}
+                    />
+                    <Animated.View
+                      style={[
+                        {
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: "#0984E3",
+                        },
+                        processingIndicatorStyle,
+                      ]}
+                    />
+                  </View>
+                  <Text style={{ color: "#636E72", fontWeight: "500" }}>
+                    Processing...
+                  </Text>
+                </View>
               ) : (
                 <>
                   <TouchableOpacity style={styles.attachBtn}>
@@ -463,6 +527,7 @@ export default function ChatScreen() {
               )}
               <TouchableOpacity
                 onPress={() => {
+                  if (isProcessingVoice) return; // Disable while processing
                   if (inputText.length > 0) {
                     sendMessage();
                   } else {
@@ -470,16 +535,20 @@ export default function ChatScreen() {
                     else startRecording();
                   }
                 }}
+                disabled={isProcessingVoice}
                 style={[
                   styles.sendButton,
                   (inputText.length > 0 || isRecording) &&
                     styles.sendButtonActive,
                   isRecording && { backgroundColor: "#FF7675" },
+                  isProcessingVoice && { backgroundColor: "#B2BEC3" },
                 ]}
               >
                 <IconSymbol
                   name={
-                    inputText.length > 0
+                    isProcessingVoice
+                      ? "hourglass"
+                      : inputText.length > 0
                       ? "arrow.up.right"
                       : isRecording
                       ? "xmark"
@@ -487,7 +556,9 @@ export default function ChatScreen() {
                   }
                   size={18}
                   color={
-                    inputText.length > 0 || isRecording ? "#FFFFFF" : "#636E72"
+                    inputText.length > 0 || isRecording || isProcessingVoice
+                      ? "#FFFFFF"
+                      : "#636E72"
                   }
                 />
               </TouchableOpacity>

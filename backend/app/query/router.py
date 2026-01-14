@@ -13,7 +13,7 @@ async def query(query: QueryRequest, user_data: dict = Depends(verify_token)):
     response = await controller.query(query, user_data)
     return response
 
-@router.post("/voice", response_model=QueryResponse)
+@router.post("/voice")
 async def voice_query(file: UploadFile = File(...)):
     response = await controller.voice_query(file)
     return response

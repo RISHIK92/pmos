@@ -34,6 +34,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withAndroidAssistant",
       [
         "@react-native-google-signin/google-signin",
         {
