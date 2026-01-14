@@ -5,5 +5,5 @@ service = AuthService()
 
 class AuthController:
     async def register(self, userData: dict):
-        registerUser = await service.register(uid= userData.uid, email= userData.email)
+        registerUser = await service.register(uid= userData['uid'], email= userData['email'])
         return registerUser

@@ -18,26 +18,23 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SidebarContext } from "./_layout";
-import { auth } from "@/lib/firebase";
+import { auth } from "../../lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import GoogleLogin from "@/components/GoogleLogin";
-import LoginModal from "@/components/LoginModal";
+import ChatEmptyState from "@/components/ChatEmptyState";
 import Animated, {
   FadeInUp,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   Layout,
-  FadeIn,
   withRepeat,
 } from "react-native-reanimated";
 import { Audio } from "expo-av";
 import { shareAsync } from "expo-sharing";
-import { TypingIndicator } from "@/components/ui/TypingIndicator";
 
 const { width } = Dimensions.get("window");
 
-// Mock Data
 type Message = {
   id: string;
   text: string;
@@ -76,33 +73,16 @@ const INITIAL_NOTIFICATIONS = [
   },
 ];
 
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: "1",
-    text: "What is the status of the new rendering engine?",
-    sender: "user",
-    timestamp: "10:00",
-  },
-  {
-    id: "2",
-    text: "The rendering engine is currently in Phase 2 of testing. Performance benchmarks show a 40% improvement in frame rates on mobile devices. We are targeting a full release by Q3 2026.",
-    sender: "system",
-    timestamp: "10:01",
-    sources: ["Jira #402", "Tech Spec v2.1"],
-  },
-];
-
 export default function ChatScreen() {
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const { toggleSidebar } = useContext(SidebarContext);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [isRecording, setIsRecording] = useState(false);
-
-  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const recordingScale = useSharedValue(1);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -110,22 +90,20 @@ export default function ChatScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [initializing, setInitializing] = useState(true);
 
-  // Handle user state changes - Updated for Firebase JS SDK
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
       if (initializing) setInitializing(false);
 
-      if (user) {
+      if (firebaseUser) {
         try {
-          const token = await user.getIdToken();
-
+          const token = await firebaseUser.getIdToken();
           const backendUrl =
             Platform.OS === "android"
-              ? "http://10.0.2.2:8000"
+              ? "http://10.111.69.129:8000"
               : "http://localhost:8000";
 
-          await fetch(`${backendUrl}/auth/register`, {
+          const data = await fetch(`${backendUrl}/auth/register`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -133,13 +111,14 @@ export default function ChatScreen() {
             },
             body: JSON.stringify({}),
           });
+          console.log(data);
         } catch (err) {
           console.error("Backend sync failed", err);
         }
       }
     });
 
-    return unsubscribe; // unsubscribe on unmount
+    return unsubscribe;
   }, [initializing]);
 
   const recordingIndicatorStyle = useAnimatedStyle(() => ({
@@ -198,8 +177,6 @@ export default function ChatScreen() {
 
       if (uri) {
         await shareAsync(uri);
-        // Still mock the text response for chat flow continuity
-        // setInputText("Show me the memory usage trends for this week.");
       }
     } catch (error) {
       console.error("Failed to stop recording", error);
@@ -228,7 +205,6 @@ export default function ChatScreen() {
     setInputText("");
     setIsTyping(true);
 
-    // Simulate system response with typing delay
     setTimeout(() => {
       setIsTyping(false);
       const response: Message = {
@@ -246,25 +222,27 @@ export default function ChatScreen() {
   };
 
   useEffect(() => {
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    if (messages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
   }, [messages, isTyping]);
 
-  const renderItem = ({ item, index }: { item: Message; index: number }) => {
+  const renderItem = ({ item, index }: { item: Message; index?: number }) => {
     const isSystem = item.sender === "system";
+    const itemIndex = index ?? 0;
 
     if (isSystem) {
       return (
         <Animated.View
-          entering={FadeInUp.delay(index * 50)
+          entering={FadeInUp.delay(itemIndex * 50)
             .springify()
             .damping(30)
             .stiffness(200)}
           layout={Layout.springify().damping(30).stiffness(200)}
           style={styles.systemContainer}
         >
-          {/* Sources Row */}
           {item.sources && (
             <View style={styles.sourcesContainer}>
               <View style={styles.sourcesHeader}>
@@ -281,7 +259,6 @@ export default function ChatScreen() {
             </View>
           )}
 
-          {/* Answer Content */}
           <View style={styles.answerRow}>
             <View style={styles.systemIcon}>
               <IconSymbol name="sparkles" size={20} color="#00B894" />
@@ -306,7 +283,7 @@ export default function ChatScreen() {
 
     return (
       <Animated.View
-        entering={FadeInUp.delay(index * 50)
+        entering={FadeInUp.delay(itemIndex * 50)
           .springify()
           .damping(30)
           .stiffness(200)}
@@ -319,218 +296,254 @@ export default function ChatScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      {/* ... (Header and FlatList) */}
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 2}
+    >
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* Modern Header */}
-      <SafeAreaView style={styles.headerContainer}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
-              <IconSymbol name="line.3.horizontal" size={24} color="#2D3436" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={styles.menuButton}
-              onPress={() => setShowNotifications(true)}
-            >
-              <IconSymbol name="bell.fill" size={20} color="#000" />
-              {notifications.some((n) => !n.read) && (
-                <View style={styles.badge} />
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
-
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        style={styles.list}
-        showsVerticalScrollIndicator={false}
-        ListFooterComponent={
-          isTyping ? (
-            <View style={styles.typingWrapper}>
-              <View style={styles.systemIcon}>
-                <IconSymbol name="sparkles" size={20} color="#00B894" />
-              </View>
-              <Text style={styles.thinkingText}>Thinking...</Text>
-            </View>
-          ) : (
-            <View style={{ height: 20 }} />
-          )
-        }
-      />
-
-      {/* Perplexity-style Input */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-        style={styles.inputOuterContainer}
-      >
-        <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            {isRecording ? (
-              <View
-                style={[
-                  styles.input,
-                  { flexDirection: "row", alignItems: "center", gap: 12 },
-                ]}
+        <SafeAreaView style={styles.headerContainer}>
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity
+                onPress={toggleSidebar}
+                style={styles.menuButton}
               >
-                <Animated.View
-                  style={[
-                    {
-                      width: 10,
-                      height: 10,
-                      borderRadius: 5,
-                      backgroundColor: "#FF7675",
-                    },
-                    recordingIndicatorStyle,
-                  ]}
+                <IconSymbol
+                  name="line.3.horizontal"
+                  size={24}
+                  color="#2D3436"
                 />
-                <Text style={{ color: "#636E72", fontWeight: "500" }}>
-                  Listening...
-                </Text>
-              </View>
-            ) : (
-              <>
-                <TouchableOpacity style={styles.attachBtn}>
-                  <IconSymbol name="plus" size={20} color="#636E72" />
-                </TouchableOpacity>
-                <TextInput
-                  style={styles.input}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  placeholder="Ask anything..."
-                  placeholderTextColor="#999"
-                  selectionColor="#00B894"
-                  multiline
-                />
-              </>
-            )}
-            <TouchableOpacity
-              onPress={() => {
-                if (inputText.length > 0) {
-                  sendMessage();
-                } else {
-                  if (isRecording) stopRecording();
-                  else startRecording();
-                }
-              }}
-              style={[
-                styles.sendButton,
-                (inputText.length > 0 || isRecording) &&
-                  styles.sendButtonActive,
-                isRecording && { backgroundColor: "#FF7675" },
-              ]}
-            >
-              <IconSymbol
-                name={
-                  inputText.length > 0
-                    ? "arrow.up.right"
-                    : isRecording
-                    ? "xmark"
-                    : "mic.fill"
-                }
-                size={18}
-                color={
-                  inputText.length > 0 || isRecording ? "#FFFFFF" : "#636E72"
-                }
-              />
-            </TouchableOpacity>
-          </View>
-
-          {!user && !initializing && (
-            <View style={styles.loginContainer}>
-              <GoogleLogin />
-            </View>
-          )}
-
-          <Text style={styles.footerNote}>
-            PMOS can make mistakes. Verify important info.
-          </Text>
-        </View>
-      </KeyboardAvoidingView>
-
-      {/* Notifications Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={showNotifications}
-        onRequestClose={() => setShowNotifications(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowNotifications(false)}
-            activeOpacity={1}
-          />
-          <Animated.View style={styles.notificationModal}>
-            <View style={styles.notifHeader}>
-              <Text style={styles.notifTitle}>Notifications</Text>
-              <TouchableOpacity onPress={() => setShowNotifications(false)}>
-                <Ionicons name="close-circle" size={24} color="#B2BEC3" />
               </TouchableOpacity>
             </View>
 
-            <FlatList
-              data={notifications}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.notifList}
-              renderItem={({ item }) => (
-                <TouchableOpacity
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={styles.menuButton}
+                onPress={() => setShowNotifications(true)}
+              >
+                <IconSymbol name="bell.fill" size={20} color="#000" />
+                {notifications.some((n) => !n.read) && (
+                  <View style={styles.badge} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          style={styles.list}
+          contentContainerStyle={[
+            styles.listContent,
+            messages.length === 0 && { flex: 1, justifyContent: "center" },
+          ]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <ChatEmptyState
+              loggedIn={!!user}
+              onLoginSuccess={() => setShowLoginModal(false)}
+            />
+          }
+          ListFooterComponent={
+            isTyping ? (
+              <View style={styles.typingWrapper}>
+                <View style={styles.systemIcon}>
+                  <IconSymbol name="sparkles" size={20} color="#00B894" />
+                </View>
+                <Text style={styles.thinkingText}>Thinking...</Text>
+              </View>
+            ) : (
+              <View style={{ height: 20 }} />
+            )
+          }
+        />
+
+        <View style={styles.inputOuterContainer}>
+          <View style={styles.inputContainer}>
+            <View style={styles.inputWrapper}>
+              {isRecording ? (
+                <View
                   style={[
-                    styles.notifItem,
-                    !item.read && styles.notifItemUnread,
+                    styles.input,
+                    { flexDirection: "row", alignItems: "center", gap: 12 },
                   ]}
                 >
-                  <View
+                  <Animated.View
                     style={[
-                      styles.notifIcon,
-                      { backgroundColor: item.color + "15" },
+                      {
+                        width: 10,
+                        height: 10,
+                        borderRadius: 5,
+                        backgroundColor: "#FF7675",
+                      },
+                      recordingIndicatorStyle,
+                    ]}
+                  />
+                  <Text style={{ color: "#636E72", fontWeight: "500" }}>
+                    Listening...
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <TouchableOpacity style={styles.attachBtn}>
+                    <IconSymbol name="plus" size={20} color="#636E72" />
+                  </TouchableOpacity>
+                  <TextInput
+                    style={styles.input}
+                    value={inputText}
+                    onChangeText={setInputText}
+                    placeholder="Ask anything..."
+                    placeholderTextColor="#999"
+                    selectionColor="#00B894"
+                    multiline
+                  />
+                </>
+              )}
+              <TouchableOpacity
+                onPress={() => {
+                  if (inputText.length > 0) {
+                    sendMessage();
+                  } else {
+                    if (isRecording) stopRecording();
+                    else startRecording();
+                  }
+                }}
+                style={[
+                  styles.sendButton,
+                  (inputText.length > 0 || isRecording) &&
+                    styles.sendButtonActive,
+                  isRecording && { backgroundColor: "#FF7675" },
+                ]}
+              >
+                <IconSymbol
+                  name={
+                    inputText.length > 0
+                      ? "arrow.up.right"
+                      : isRecording
+                      ? "xmark"
+                      : "mic.fill"
+                  }
+                  size={18}
+                  color={
+                    inputText.length > 0 || isRecording ? "#FFFFFF" : "#636E72"
+                  }
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.footerNote}>
+              PMOS can make mistakes. Verify important info.
+            </Text>
+          </View>
+        </View>
+
+        {/* Notifications Modal */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={showNotifications}
+          onRequestClose={() => setShowNotifications(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              onPress={() => setShowNotifications(false)}
+            />
+            <Animated.View
+              entering={FadeInUp.springify()}
+              style={styles.notificationModal}
+            >
+              <View style={styles.notifHeader}>
+                <Text style={styles.notifTitle}>Notifications</Text>
+                <TouchableOpacity onPress={() => setShowNotifications(false)}>
+                  <IconSymbol name="xmark" size={20} color="#636E72" />
+                </TouchableOpacity>
+              </View>
+
+              <FlatList
+                data={notifications}
+                style={styles.notifList}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.notifItem,
+                      !item.read && styles.notifItemUnread,
                     ]}
                   >
-                    <Ionicons
-                      name={item.icon as any}
-                      size={20}
-                      color={item.color}
-                    />
-                  </View>
-                  <View style={styles.notifContent}>
-                    <View style={styles.notifTopRow}>
-                      <Text style={styles.notifItemTitle}>{item.title}</Text>
-                      <Text style={styles.notifTime}>{item.time}</Text>
+                    <View
+                      style={[
+                        styles.notifIcon,
+                        { backgroundColor: `${item.color}15` },
+                      ]}
+                    >
+                      <Ionicons
+                        name={item.icon as any}
+                        size={18}
+                        color={item.color}
+                      />
                     </View>
-                    <Text style={styles.notifMessage} numberOfLines={2}>
-                      {item.message}
-                    </Text>
-                  </View>
-                  {!item.read && <View style={styles.unreadDot} />}
-                </TouchableOpacity>
-              )}
+                    <View style={styles.notifContent}>
+                      <View style={styles.notifTopRow}>
+                        <Text style={styles.notifItemTitle}>{item.title}</Text>
+                        <Text style={styles.notifTime}>{item.time}</Text>
+                      </View>
+                      <Text style={styles.notifMessage} numberOfLines={2}>
+                        {item.message}
+                      </Text>
+                    </View>
+                    {!item.read && <View style={styles.unreadDot} />}
+                  </TouchableOpacity>
+                )}
+              />
+
+              <TouchableOpacity style={styles.markReadBtn}>
+                <Text style={styles.markReadText}>Mark all as read</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </Modal>
+
+        {/* Login Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={showLoginModal}
+          onRequestClose={() => setShowLoginModal(false)}
+        >
+          <View style={styles.bottomSheetOverlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              onPress={() => setShowLoginModal(false)}
             />
-
-            <TouchableOpacity style={styles.markReadBtn}>
-              <Text style={styles.markReadText}>Mark all as read</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
-      </Modal>
-
-      <LoginModal
-        visible={showLoginModal}
-        onClose={() => setShowLoginModal(false)}
-        onLoginSuccess={() => {
-          // Optional: You can do extra actions here if needed
-        }}
-      />
-    </View>
+            <View style={styles.loginModalContent}>
+              <View style={styles.loginHeader}>
+                <IconSymbol name="lock.fill" size={24} color="#2D3436" />
+                <Text style={styles.loginTitle}>Authentication Required</Text>
+              </View>
+              <Text style={styles.loginSubtitle}>
+                Please sign in to continue your conversation.
+              </Text>
+              <View style={styles.loginActionContainer}>
+                <GoogleLogin onLoginSuccess={() => setShowLoginModal(false)} />
+              </View>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowLoginModal(false)}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -579,11 +592,9 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 20,
     paddingTop: 24,
-    paddingBottom: 40,
   },
-  // User Prompt Styles
   userContainer: {
-    marginBottom: 32,
+    marginBottom: 24,
     alignItems: "flex-end",
   },
   userText: {
@@ -595,9 +606,8 @@ const styles = StyleSheet.create({
     textAlign: "right",
     maxWidth: "90%",
   },
-  // System Answer Styles
   systemContainer: {
-    marginBottom: 40,
+    marginBottom: 32,
   },
   sourcesContainer: {
     marginBottom: 16,
@@ -671,7 +681,7 @@ const styles = StyleSheet.create({
   typingWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
+    gap: 6,
     marginLeft: 0,
     marginBottom: 20,
   },
@@ -680,14 +690,11 @@ const styles = StyleSheet.create({
     color: "#636E72",
     fontStyle: "italic",
   },
-  // Input Styles
   inputOuterContainer: {
     backgroundColor: "#FFFFFF",
   },
   inputContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === "ios" ? 12 : 16,
   },
   inputWrapper: {
     flexDirection: "row",
@@ -717,7 +724,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     color: "#2D3436",
-    fontSize: 12,
+    fontSize: 14,
     maxHeight: 120,
     marginRight: 12,
     fontWeight: "500",
@@ -750,12 +757,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#FFF",
   },
-  // Notification Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "flex-start",
-    paddingTop: 60, // below header roughly
+    paddingTop: 60,
     paddingHorizontal: 16,
   },
   notificationModal: {
@@ -844,5 +850,54 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: "#0984E3",
+  },
+  loginHeader: {
+    marginBottom: 16,
+    alignItems: "center",
+    gap: 12,
+  },
+  loginTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#2D3436",
+  },
+  loginSubtitle: {
+    fontSize: 14,
+    color: "#636E72",
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  loginActionContainer: {
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  cancelButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  cancelText: {
+    fontSize: 14,
+    color: "#B2BEC3",
+    fontWeight: "500",
+  },
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  loginModalContent: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
   },
 });

@@ -1,67 +1,79 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, TouchableOpacity, Text, View, Alert } from "react-native";
-import { auth } from "@/lib/firebase";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
+import { auth } from "../lib/firebase"; // Your Firebase config file
 import { Ionicons } from "@expo/vector-icons";
-import * as WebBrowser from "expo-web-browser";
-import * as Google from "expo-auth-session/providers/google";
-
-// Required for web browser to close properly
-WebBrowser.maybeCompleteAuthSession();
 
 const WEB_CLIENT_ID =
   "259162332596-1n34g91i5e7qte51e7kcdote5k9f2va5.apps.googleusercontent.com";
 
-const ANDROID_CLIENT_ID =
-  "259162332596-j0ar6u1aetfvtfpe06mqqp1u0vev937q.apps.googleusercontent.com";
-
-interface GoogleLoginProps {
+export default function GoogleLogin({
+  onLoginSuccess,
+}: {
   onLoginSuccess?: () => void;
-}
-
-export default function GoogleLogin({ onLoginSuccess }: GoogleLoginProps) {
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    // We use the same client ID for now, as we only have the Web Client ID from google-services.json.
-    // Ideally, you should generate native iOS/Android Client IDs in Google Cloud Console for better native CX.
-    androidClientId: ANDROID_CLIENT_ID,
-    webClientId: WEB_CLIENT_ID,
-    redirectUri: "com.rishik.pmos:/oauth2redirect",
-  });
+}) {
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (response?.type === "success") {
-      const { id_token } = response.params;
+    GoogleSignin.configure({
+      webClientId: WEB_CLIENT_ID,
+    });
+  }, []);
 
-      const credential = GoogleAuthProvider.credential(id_token);
-      signInWithCredential(auth, credential)
-        .then((result) => {
-          console.log("User signed in:", result.user.email);
-          if (onLoginSuccess) {
-            onLoginSuccess();
-          }
-        })
-        .catch((error) => {
-          // Handle specific error codes if needed
-          console.error(error);
-          Alert.alert("Sign In Error", error.message);
-        });
-    } else if (response?.type === "error") {
-      Alert.alert(
-        "Sign In Error",
-        response.error?.message || "Something went wrong"
-      );
+  const onGoogleButtonPress = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      // Check if your device supports Google Play
+      await GoogleSignin.hasPlayServices({
+        showPlayServicesUpdateDialog: true,
+      });
+
+      // Get the user's ID token
+      const signInResult = await GoogleSignin.signIn();
+      const idToken = signInResult.idToken;
+      if (!idToken) {
+        throw new Error("No ID token found");
+      }
+
+      // Create a Google credential with the token
+      const googleCredential = GoogleAuthProvider.credential(idToken);
+
+      // Sign-in the user with the credential
+      const userCredential = await signInWithCredential(auth, googleCredential);
+
+      console.log("User signed in:", userCredential.user.email);
+
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      }
+    } catch (error: any) {
+      console.error(error);
+      if (error.code !== "SIGN_IN_CANCELLED") {
+        Alert.alert("Login Failed", error.message || "An error occurred");
+      }
+    } finally {
+      setLoading(false);
     }
-  }, [response]);
+  };
 
   return (
     <View style={styles.container}>
       <TouchableOpacity
         style={styles.button}
-        onPress={() => promptAsync()}
-        disabled={!request}
+        onPress={onGoogleButtonPress}
+        disabled={loading}
       >
-        <Ionicons name="logo-google" size={18} color="#FFF" />
-        <Text style={styles.buttonText}>Continue with Google</Text>
+        <Ionicons
+          name="logo-google"
+          size={18}
+          color="#2D3436"
+          style={styles.icon}
+        />
+        <Text style={styles.text}>
+          {loading ? "Signing in..." : "Continue with Google"}
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -76,21 +88,25 @@ const styles = StyleSheet.create({
   button: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#4285F4", // Google Blue
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 24,
-    gap: 10,
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E1E1E1",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
+    gap: 8,
   },
-  buttonText: {
-    color: "#FFF",
+  icon: {
+    marginRight: 4,
+  },
+  text: {
     fontSize: 14,
     fontWeight: "600",
+    color: "#2D3436",
   },
 });

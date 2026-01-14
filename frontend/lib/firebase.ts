@@ -1,8 +1,7 @@
 import { initializeApp } from "firebase/app";
-// @ts-ignore
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
-import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
+import { getAuth } from "firebase/auth";
 
+// Your Firebase configuration from Firebase Console
 const firebaseConfig = {
   apiKey: "AIzaSyAfxUIy-xfT4SFW03m86mnxQXXljLzbW5g",
   authDomain: "pmos-fb3ee.firebaseapp.com",
@@ -13,10 +12,9 @@ const firebaseConfig = {
   measurementId: "G-F8X75B2ZDZ",
 };
 
-// Initialize App
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// 2. Initialize Auth with Persistence (This keeps the user logged in!)
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(ReactNativeAsyncStorage),
-});
+// Initialize Firebase Authentication
+export const auth = getAuth(app);
+export default app;
