@@ -65,6 +65,7 @@ const MAPPING = {
   "leaf.fill": "eco",
   "clock.arrow.circlepath": "history",
   "bolt.fill": "flash-on",
+  hourglass: "hourglass-empty",
 };
 
 export type IconSymbolName = keyof typeof MAPPING;

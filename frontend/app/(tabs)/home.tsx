@@ -32,6 +32,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Audio } from "expo-av";
 import { shareAsync } from "expo-sharing";
+import { WaveformIcon } from "@/components/ui/WaveformIcon";
 
 const { width } = Dimensions.get("window");
 
@@ -85,7 +86,7 @@ export default function ChatScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
 
-  const recordingScale = useSharedValue(1);
+  // recordingScale removed
   const processingScale = useSharedValue(1);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
 
@@ -123,10 +124,6 @@ export default function ChatScreen() {
     return unsubscribe;
   }, [initializing]);
 
-  const recordingIndicatorStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: recordingScale.value }],
-  }));
-
   const processingIndicatorStyle = useAnimatedStyle(() => ({
     transform: [{ scale: processingScale.value }],
     opacity: processingScale.value > 1 ? 0.7 : 1,
@@ -148,11 +145,7 @@ export default function ChatScreen() {
         setRecording(recording);
         setIsRecording(true);
 
-        recordingScale.value = withRepeat(
-          withSpring(1.6, { duration: 600 }),
-          -1,
-          true
-        );
+        // recording animation handled by WaveformIcon component
       } else {
         Alert.alert(
           "Permission Required",
@@ -173,7 +166,7 @@ export default function ChatScreen() {
 
   const stopRecording = async () => {
     setIsRecording(false);
-    recordingScale.value = withSpring(1);
+    // recording animation reset handled by WaveformIcon component
 
     if (!recording) return;
 
@@ -448,17 +441,7 @@ export default function ChatScreen() {
                     { flexDirection: "row", alignItems: "center", gap: 12 },
                   ]}
                 >
-                  <Animated.View
-                    style={[
-                      {
-                        width: 10,
-                        height: 10,
-                        borderRadius: 5,
-                        backgroundColor: "#FF7675",
-                      },
-                      recordingIndicatorStyle,
-                    ]}
-                  />
+                  <WaveformIcon isListening={true} color="#4285F4" />
                   <Text style={{ color: "#636E72", fontWeight: "500" }}>
                     Listening...
                   </Text>
@@ -540,7 +523,7 @@ export default function ChatScreen() {
                   styles.sendButton,
                   (inputText.length > 0 || isRecording) &&
                     styles.sendButtonActive,
-                  isRecording && { backgroundColor: "#FF7675" },
+                  isRecording && { backgroundColor: "#4285F4" },
                   isProcessingVoice && { backgroundColor: "#B2BEC3" },
                 ]}
               >
@@ -551,7 +534,7 @@ export default function ChatScreen() {
                       : inputText.length > 0
                       ? "arrow.up.right"
                       : isRecording
-                      ? "xmark"
+                      ? "checkmark"
                       : "mic.fill"
                   }
                   size={18}

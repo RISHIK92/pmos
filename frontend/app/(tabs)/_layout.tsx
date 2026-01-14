@@ -20,10 +20,9 @@ export default function AppLayout() {
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: "#FFFFFF" },
           }}
         >
-          <Stack.Screen name="index" />
+          <Stack.Screen name="home" />
           <Stack.Screen name="memory" />
           <Stack.Screen name="tasks" />
           <Stack.Screen name="health" />
@@ -42,6 +41,5 @@ export default function AppLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
   },
 });

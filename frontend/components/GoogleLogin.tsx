@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, TouchableOpacity, Text, View, Alert } from "react-native";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import {
+  GoogleSignin,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
-import { auth } from "../lib/firebase"; // Your Firebase config file
+import { auth } from "../lib/firebase";
 import { Ionicons } from "@expo/vector-icons";
 
 const WEB_CLIENT_ID =
@@ -18,6 +21,7 @@ export default function GoogleLogin({
   useEffect(() => {
     GoogleSignin.configure({
       webClientId: WEB_CLIENT_ID,
+      scopes: ["email", "profile"],
     });
   }, []);
 
@@ -25,33 +29,30 @@ export default function GoogleLogin({
     if (loading) return;
     setLoading(true);
     try {
-      // Check if your device supports Google Play
-      await GoogleSignin.hasPlayServices({
-        showPlayServicesUpdateDialog: true,
-      });
+      await GoogleSignin.hasPlayServices();
 
-      // Get the user's ID token
-      const signInResult = await GoogleSignin.signIn();
-      const idToken = signInResult.idToken;
-      if (!idToken) {
-        throw new Error("No ID token found");
-      }
+      // 1. Sign In via Android System
+      const response = await GoogleSignin.signIn();
 
-      // Create a Google credential with the token
-      const googleCredential = GoogleAuthProvider.credential(idToken);
+      // 2. Handle v13+ data structure
+      const idToken = response.idToken;
+      if (!idToken) throw new Error("No ID Token found");
 
-      // Sign-in the user with the credential
-      const userCredential = await signInWithCredential(auth, googleCredential);
+      // 3. Authenticate with Firebase
+      const credential = GoogleAuthProvider.credential(idToken);
+      await signInWithCredential(auth, credential);
 
-      console.log("User signed in:", userCredential.user.email);
-
-      if (onLoginSuccess) {
-        onLoginSuccess();
-      }
+      if (onLoginSuccess) onLoginSuccess();
     } catch (error: any) {
-      console.error(error);
-      if (error.code !== "SIGN_IN_CANCELLED") {
-        Alert.alert("Login Failed", error.message || "An error occurred");
+      if (error) {
+        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+          console.log("User cancelled");
+        } else {
+          // If this happens, it's definitely a SHA-1 issue
+          Alert.alert("Native Login Error", error.message);
+        }
+      } else {
+        Alert.alert("Firebase Error", error.message);
       }
     } finally {
       setLoading(false);
@@ -101,12 +102,6 @@ const styles = StyleSheet.create({
     elevation: 2,
     gap: 8,
   },
-  icon: {
-    marginRight: 4,
-  },
-  text: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#2D3436",
-  },
+  icon: { marginRight: 4 },
+  text: { fontSize: 14, fontWeight: "600", color: "#2D3436" },
 });

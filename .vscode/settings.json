@@ -1,4 +1,5 @@
 {
   "java.configuration.updateBuildConfiguration": "interactive",
-  "prisma.pinToPrisma6": true
+  "prisma.pinToPrisma6": true,
+  "java.compile.nullAnalysis.mode": "automatic"
 }
