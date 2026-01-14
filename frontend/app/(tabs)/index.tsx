@@ -175,15 +175,40 @@ export default function ChatScreen() {
       const uri = recording.getURI();
       setRecording(null);
 
-      if (uri) {
-        await shareAsync(uri);
+      if (uri && user) {
+        const formData = new FormData();
+
+        formData.append("file", {
+          uri: uri,
+          name: "recording.m4a",
+          type: "audio/m4a",
+        } as any);
+
+        const token = await user.getIdToken();
+        const backendUrl =
+          Platform.OS === "android"
+            ? "http://10.111.69.129:8000"
+            : "http://localhost:8000";
+
+        const response = await fetch(`${backendUrl}/query/voice`, {
+          method: "POST",
+          body: formData,
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const result = await response.json();
+        if (result) {
+          setInputText(result);
+        }
       }
     } catch (error) {
       console.error("Failed to stop recording", error);
     }
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!inputText.trim()) return;
 
     if (!user) {
@@ -202,23 +227,54 @@ export default function ChatScreen() {
     };
 
     setMessages((prev) => [...prev, newMessage]);
+    const queryText = inputText;
     setInputText("");
     setIsTyping(true);
 
-    setTimeout(() => {
+    try {
+      const token = await user.getIdToken();
+      const backendUrl =
+        Platform.OS === "android"
+          ? "http://10.111.69.129:8000"
+          : "http://localhost:8000";
+
+      const apiResponse = await fetch(`${backendUrl}/query/text`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ query: queryText }),
+      });
+
+      const result = await apiResponse.json();
       setIsTyping(false);
+
       const response: Message = {
         id: (Date.now() + 1).toString(),
-        text: "I've pulled the memory usage data. Average daily usage is down by 15% following the 'Garbage Collection' optimization run yesterday. Peak usage remains under 2GB.",
+        text: result.response || "Sorry, I couldn't process your request.",
         sender: "system",
         timestamp: new Date().toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
         }),
-        sources: ["Memory Log", "Performance Monitor"],
+        sources: ["PMOS Intelligence"],
       };
       setMessages((prev) => [...prev, response]);
-    }, 2000);
+    } catch (error) {
+      console.error("Failed to send message", error);
+      setIsTyping(false);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, there was an error processing your request. Please try again.",
+        sender: "system",
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    }
   };
 
   useEffect(() => {
