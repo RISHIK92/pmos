@@ -3,6 +3,7 @@ from services.db import db
 import os
 from pathlib import Path
 from services.transcribe import voice_to_text
+from app.query.schema import QueryRequest
 
 class QueryService:
     def __init__(self):
@@ -10,7 +11,17 @@ class QueryService:
         self.download_dir.mkdir(parents=True, exist_ok=True)
 
 
-    # async def query(self, query: str, email: str):
+    async def query(self, query: QueryRequest):
+        # response = await db.query.create(
+        #     data={
+        #         "query": query,
+        #         "userId": uid
+        #     }
+        # )
+        response = {
+            "response": query.query
+        }
+        return response
 
     async def save_query(self, file: UploadFile):
         temp_path = self.download_dir / f"temp_{file.filename}"

@@ -1,11 +1,12 @@
 from app.query.service import QueryService
 from fastapi import UploadFile
+from app.query.schema import QueryRequest
 
 service = QueryService()
 
 class QueryContoller:
-    async def query(self, query: str, user_data: dict):
-        response = await service.query(query, email=user_data['uid'])
+    async def query(self, query: QueryRequest):
+        response = await service.query(query)
         return response
     
     async def voice_query(self, file: UploadFile):

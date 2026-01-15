@@ -2,7 +2,7 @@ from fastapi import UploadFile, File
 from pydantic import BaseModel
 
 class QueryRequest(BaseModel):
-    file: UploadFile = File(...)
+    query: str
 
 class QueryResponse(BaseModel):
     response: str

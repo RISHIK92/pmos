@@ -365,8 +365,8 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 2}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
     >
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -802,9 +802,14 @@ const styles = StyleSheet.create({
   },
   inputOuterContainer: {
     backgroundColor: "#FFFFFF",
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   inputContainer: {
     paddingHorizontal: 16,
+    paddingBottom: 8, // Small padding for footer note
   },
   inputWrapper: {
     flexDirection: "row",
@@ -852,7 +857,6 @@ const styles = StyleSheet.create({
   },
   footerNote: {
     textAlign: "center",
-    marginTop: 8,
     fontSize: 11,
     color: "#B2BEC3",
   },

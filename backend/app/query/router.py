@@ -4,13 +4,13 @@ from common.security import verify_token
 from app.query.controller import QueryContoller
 from app.query.schema import QueryRequest, QueryResponse
 
-router = APIRouter(prefix="/query", tags=["Query", "Input"])
+router = APIRouter(prefix="/query")
 
 controller = QueryContoller()
 
-@router.post("/text", response_model=QueryResponse)
-async def query(query: QueryRequest, user_data: dict = Depends(verify_token)):
-    response = await controller.query(query, user_data)
+@router.post("/query")
+async def query(query: QueryRequest):
+    response = await controller.query(query)
     return response
 
 @router.post("/voice")

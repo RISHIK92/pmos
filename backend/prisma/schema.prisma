@@ -19,12 +19,43 @@ model User {
     id    String @id @default(cuid())
     email String @unique
 
-    queries Query[]
+    ConversationLog ConversationLog[]
+    CoreMemory CoreMemory[]
 }
 
-model Query {
-    id    String @id @default(cuid())
-    query String
-    user  User   @relation(fields: [userId], references: [id])
-    userId String
+model ConversationLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  userRaw     String
+  aiResponse  String
+
+  // The Enricher Output (Stored here for debugging/analytics)
+  // Contains: { summary: "", synthetic_query: "", tags: [] }
+  enricherData Json?   
+
+  // Search Optimization
+  targetCategory String? // e.g., "health", "tasks", "general"
+
+  @@index([userId, targetCategory])
+  @@index([createdAt])
+}
+
+model CoreMemory {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  // The Fact
+  fact      String   // "User is allergic to peanuts"
+  category  String   // "health", "preference", "work"
+  certainty Float    // 0.0 to 1.0 (How sure is the AI?)
+
+  // Sync Status (To ensure ChromaDB stays updated)
+  isSynced  Boolean  @default(false) 
+
+  @@index([userId, category])
 }
