@@ -103,7 +103,7 @@ export default function ChatScreen() {
           const token = await firebaseUser.getIdToken();
           const backendUrl =
             Platform.OS === "android"
-              ? "http://10.111.69.129:8000"
+              ? "http://10.141.28.129:8000"
               : "http://localhost:8000";
 
           const data = await fetch(`${backendUrl}/auth/register`, {
@@ -194,7 +194,7 @@ export default function ChatScreen() {
 
         const backendUrl =
           Platform.OS === "android"
-            ? "http://10.0.2.2:8000"
+            ? "http://10.141.28.129:8000"
             : "http://localhost:8000";
 
         const response = await fetch(`${backendUrl}/query/voice`, {
@@ -246,7 +246,7 @@ export default function ChatScreen() {
       const token = await user.getIdToken();
       const backendUrl =
         Platform.OS === "android"
-          ? "http://10.111.69.129:8000"
+          ? "http://10.141.28.129:8000"
           : "http://localhost:8000";
 
       const apiResponse = await fetch(`${backendUrl}/query/text`, {

@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SidebarContext } from "./_layout";
+import { auth } from "../../lib/firebase";
 import Animated, {
   FadeInDown,
   FadeInUp,
@@ -129,6 +130,37 @@ export default function RestrictorScreen() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const giveUpTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const backendUrl =
+    Platform.OS === "android"
+      ? "http://10.141.28.129:8000"
+      : "http://localhost:8000";
+
+  const fetchHistory = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(`${backendUrl}/focus/history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Parse dates
+        const parsed = data.map((s: any) => ({
+          ...s,
+          date: new Date(s.startTime), // Backend returns startTime
+        }));
+        setSessionHistory(parsed);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, [showHistory]);
+
   const currentMode =
     FOCUS_MODES.find((m) => m.id === activeContext) || FOCUS_MODES[0];
   const activeBlocks = apps.filter((a) => a.isBlocked).length;
@@ -157,7 +189,7 @@ export default function RestrictorScreen() {
     setCurrentSessionId(Date.now().toString());
   };
 
-  const endSession = (completed: boolean, reason?: string) => {
+  const endSession = async (completed: boolean, reason?: string) => {
     setIsFocusActive(false);
     setShowExitSurvey(false);
     if (timerRef.current) clearInterval(timerRef.current);
@@ -168,16 +200,33 @@ export default function RestrictorScreen() {
         ? totalDuration
         : Math.max(0, Math.floor(totalDuration - timeLeft / 60));
 
-      const newSession: Session = {
-        id: currentSessionId,
-        modeId: activeContext,
-        duration: totalDuration,
-        timeSpent: spentTime,
-        date: new Date(),
-        completed,
-        reason,
-      };
-      setSessionHistory((prev) => [newSession, ...prev].slice(0, 10)); // Keep last 10
+      // Optimistic update (optional, but let's just refetch or rely on API response to be safe?
+      // Actually standard pattern here is create via API then add to list.
+
+      try {
+        const user = auth.currentUser;
+        if (user) {
+          const token = await user.getIdToken();
+          await fetch(`${backendUrl}/focus/session`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              mode: activeContext,
+              duration: totalDuration,
+              timeSpent: spentTime,
+              completed,
+              reason,
+            }),
+          });
+          fetchHistory(); // Refresh list
+        }
+      } catch (e) {
+        console.error(e);
+        Alert.alert("Error", "Failed to save session.");
+      }
     }
 
     if (completed) {

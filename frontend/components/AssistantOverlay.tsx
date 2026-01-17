@@ -228,7 +228,7 @@ export default function AssistantOverlay() {
 
         const backendUrl =
           Platform.OS === "android"
-            ? "http://10.0.2.2:8000"
+            ? "http://10.141.28.129:8000"
             : "http://localhost:8000";
 
         try {
@@ -293,7 +293,7 @@ export default function AssistantOverlay() {
 
     const backendUrl =
       Platform.OS === "android"
-        ? "http://10.0.2.2:8000"
+        ? "http://10.141.28.129:8000"
         : "http://localhost:8000";
 
     try {

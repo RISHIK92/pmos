@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -11,65 +11,104 @@ import {
   Platform,
   FlatList,
   Modal,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SidebarContext } from "./_layout";
 import Animated, { FadeInUp, Layout } from "react-native-reanimated";
+import { auth } from "../../lib/firebase"; // Ensure this path is correct
 
-// Mock Data
-const INITIAL_MEMORIES = [
-  {
-    id: "1",
-    title: "Doctor's Notes",
-    subtitle: "Cardiology Appt • Jan 12",
-    icon: "heart.fill",
-    color: "#FF6B6B",
-    content:
-      "Take 1 pill every morning. Follow up in 3 months. Avoid caffeine before noon. Blood pressure was slightly elevated (130/85), need to monitor weekly.",
-    tags: ["Health", "Urgent"],
-  },
-  {
-    id: "2",
-    title: "Mom's Special Sauce",
-    subtitle: "Cooking • Jan 10",
-    icon: "sparkles",
-    color: "#FFD93D",
-    content:
-      "Add a pinch of sugar to the tomato sauce to cut the acidity. Don't forget to call on Sunday! She also mentioned the secret ingredient is a dash of cinnamon.",
-    tags: ["Family", "Recipes"],
-  },
-  {
-    id: "3",
-    title: "Project Idea: Animation",
-    subtitle: "Work • Yesterday",
-    icon: "mic.fill",
-    color: "#6C5CE7",
-    content:
-      "Remember to check the new React Native Reanimated documentation for shared element transitions. It could really improve the gallery view experience.",
-    tags: ["Dev", "Idea"],
-  },
-  {
-    id: "4",
-    title: "Tax Reminder",
-    subtitle: "Finance • Jan 05",
-    icon: "banknote",
-    color: "#2ECC71",
-    content:
-      "Submit quarterly tax documents by the 15th. Check with accountant about home office deductions for the new renovation.",
-    tags: ["Finance", "Deadline"],
-  },
+type Memory = {
+  id: string;
+  title: string;
+  content: string;
+  tags: string[];
+  createdAt: string;
+  subtitle: string;
+  icon: string;
+  color: string;
+};
+
+const MEMORY_COLORS = [
+  "#2D3436", // Charcoal (Minimal option)
+  "#00B894", // Mint
+  "#FF7675", // Pink
+  "#6C5CE7", // Purple
+  "#FAB1A0", // Orange
+  "#FDCB6E", // Yellow
+  "#E17055", // Terracotta(Warm)
+  "#00CEC9", // Teal
 ];
+
+const getMemoryColor = (tags: string[], id: string) => {
+  if (tags && tags.some((t) => t.toLowerCase() === "general")) {
+    return "#0984E3"; // Blue for General
+  }
+  // Deterministic color based on ID
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % MEMORY_COLORS.length;
+  return MEMORY_COLORS[index];
+};
 
 export default function MemoryScreen() {
   const { toggleSidebar } = useContext(SidebarContext);
-  const [memories, setMemories] = useState(INITIAL_MEMORIES);
+  const [memories, setMemories] = useState<Memory[]>([]);
   const [searchText, setSearchText] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [newTag, setNewTag] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const backendUrl =
+    Platform.OS === "android"
+      ? "http://10.141.28.129:8000"
+      : "http://localhost:8000";
+
+  const fetchMemories = async () => {
+    setIsLoading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+
+      const res = await fetch(`${backendUrl}/memory/`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const formattedData = data.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          content: item.content,
+          tags: item.tags,
+          createdAt: item.createdAt,
+          subtitle: new Date(item.createdAt).toLocaleDateString(),
+          icon: "brain.head.profile", // Default icon
+          color: getMemoryColor(item.tags, item.id),
+        }));
+        setMemories(formattedData);
+      }
+    } catch (error) {
+      console.error("Failed to fetch memories", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMemories();
+  }, []);
 
   const contentFiltered = memories.filter(
     (m) =>
@@ -77,28 +116,72 @@ export default function MemoryScreen() {
       m.content.toLowerCase().includes(searchText.toLowerCase())
   );
 
-  const addMemory = () => {
-    if (!newTitle.trim() || !newContent.trim()) return;
+  const addMemory = async () => {
+    if (!newTitle.trim()) return;
 
-    const newMemory = {
-      id: Date.now().toString(),
-      title: newTitle,
-      subtitle: "Just Now",
-      icon: "brain.head.profile" as any, // Fallback icon
-      color: "#0984E3",
-      content: newContent,
-      tags: newTag ? [newTag] : ["General"],
-    };
+    setIsSaving(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        Alert.alert("Error", "You must be logged in to save memories.");
+        return;
+      }
+      const token = await user.getIdToken();
 
-    setMemories([newMemory, ...memories]);
-    setModalVisible(false);
-    setNewTitle("");
-    setNewContent("");
-    setNewTag("");
+      const payload = {
+        title: newTitle,
+        content: newContent || "",
+        tags: newTag ? [newTag] : ["General"],
+      };
+
+      const res = await fetch(`${backendUrl}/memory/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        setModalVisible(false);
+        setNewTitle("");
+        setNewContent("");
+        setNewTag("");
+        fetchMemories(); // Refresh list
+      } else {
+        Alert.alert("Error", "Failed to save memory");
+      }
+    } catch (error) {
+      console.error("Failed to add memory", error);
+      Alert.alert("Error", "Network error occurred");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const deleteMemory = (id: string) => {
-    setMemories((prev) => prev.filter((m) => m.id !== id));
+  const deleteMemory = async (id: string) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+
+      const res = await fetch(`${backendUrl}/memory/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        setMemories((prev) => prev.filter((m) => m.id !== id));
+      } else {
+        Alert.alert("Error", "Failed to delete memory");
+      }
+    } catch (error) {
+      console.error("Failed to delete memory", error);
+      Alert.alert("Error", "Network error occurred");
+    }
   };
 
   const renderItem = ({ item, index }: { item: any; index: number }) => {
@@ -188,6 +271,23 @@ export default function MemoryScreen() {
               {memories.length} stored memories
             </Text>
           </View>
+        }
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={{ marginTop: 40, alignItems: "center" }}>
+              <ActivityIndicator size="large" color="#4285F4" />
+              <Text style={{ marginTop: 12, color: "#B2BEC3" }}>
+                Loading memories...
+              </Text>
+            </View>
+          ) : (
+            <View style={{ marginTop: 40, alignItems: "center" }}>
+              <IconSymbol name="archivebox" size={48} color="#E1E1E1" />
+              <Text style={{ marginTop: 12, color: "#B2BEC3" }}>
+                No memories found
+              </Text>
+            </View>
+          )
         }
       />
 

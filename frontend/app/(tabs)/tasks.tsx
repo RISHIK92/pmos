@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -12,9 +12,11 @@ import {
   Platform,
   Modal,
 } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SidebarContext } from "./_layout";
 import Animated, { FadeInUp, Layout } from "react-native-reanimated";
+import { auth } from "../../lib/firebase";
 
 // Mock Data for "Task Force"
 const TASK_SECTIONS = [
@@ -53,65 +55,203 @@ const TASK_SECTIONS = [
 
 export default function TasksScreen() {
   const { toggleSidebar } = useContext(SidebarContext);
-  const [sections, setSections] = useState(TASK_SECTIONS);
-
-  // Modal State
+  const [sections, setSections] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
-  const [selectedSectionId, setSelectedSectionId] = useState("work");
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [selectedSectionId, setSelectedSectionId] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const toggleTaskStatus = (sectionId: string, taskId: string) => {
-    setSections((prevSections) =>
-      prevSections.map((section) => {
-        if (section.id !== sectionId) return section;
+  // New Section State
+  const [isAddingSection, setIsAddingSection] = useState(false);
+  const [newSectionTitle, setNewSectionTitle] = useState("");
 
+  const backendUrl =
+    Platform.OS === "android"
+      ? "http://10.141.28.129:8000"
+      : "http://localhost:8000";
+
+  const fetchSections = async () => {
+    setIsLoading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+
+      const res = await fetch(`${backendUrl}/tasks/sections`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSections(data);
+        if (data.length > 0 && !selectedSectionId) {
+          setSelectedSectionId(data[0].id);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch sections", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSections();
+  }, []);
+
+  const toggleTaskStatus = async (sectionId: string, taskId: string) => {
+    // Optimistic Update
+    setSections((prev) =>
+      prev.map((sec) => {
+        if (sec.id !== sectionId) return sec;
         return {
-          ...section,
-          tasks: section.tasks.map((task) => {
-            if (task.id !== taskId) return task;
-            const isDone = task.status === "Done";
-            return {
-              ...task,
-              status: isDone ? "Pending" : "Done",
-            };
+          ...sec,
+          tasks: sec.tasks.map((t: any) =>
+            t.id === taskId
+              ? { ...t, status: t.status === "Done" ? "Pending" : "Done" }
+              : t
+          ),
+        };
+      })
+    );
+
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+
+      const section = sections.find((s) => s.id === sectionId);
+      const task = section?.tasks.find((t: any) => t.id === taskId);
+      const newStatus = task?.status === "Done" ? "Pending" : "Done"; // Logic inverted because we optimistic updated
+
+      await fetch(`${backendUrl}/tasks/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+    } catch (error) {
+      console.error("Failed to update task", error);
+      fetchSections(); // Revert on error
+    }
+  };
+
+  const deleteTask = async (sectionId: string, taskId: string) => {
+    // Optimistic Update
+    setSections((prev) =>
+      prev.map((sec) => {
+        if (sec.id !== sectionId) return sec;
+        return {
+          ...sec,
+          tasks: sec.tasks.filter((t: any) => t.id !== taskId),
+        };
+      })
+    );
+
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+
+      await fetch(`${backendUrl}/tasks/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (error) {
+      console.error("Failed to delete task", error);
+      fetchSections();
+    }
+  };
+
+  const onChangeDate = (event: any, selectedDate?: Date) => {
+    const currentDate = selectedDate || date;
+    setShowDatePicker(Platform.OS === "ios");
+    setDate(currentDate);
+  };
+
+  const onChangeTime = (event: any, selectedDate?: Date) => {
+    const currentDate = selectedDate || date;
+    setShowTimePicker(Platform.OS === "ios");
+    setDate(currentDate);
+  };
+
+  const handleAdd = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+
+      let targetSectionId = selectedSectionId;
+
+      // 1. If Adding Section, Create it first
+      if (isAddingSection) {
+        if (!newSectionTitle.trim()) return;
+
+        const res = await fetch(`${backendUrl}/tasks/sections`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            title: newSectionTitle,
+            icon: "list.bullet",
+            color: "#0984E3",
           }),
-        };
-      })
-    );
-  };
+        });
 
-  const deleteTask = (sectionId: string, taskId: string) => {
-    setSections((prev) =>
-      prev.map((section) => {
-        if (section.id !== sectionId) return section;
-        return {
-          ...section,
-          tasks: section.tasks.filter((t) => t.id !== taskId),
-        };
-      })
-    );
-  };
+        if (res.ok) {
+          const newSection = await res.json();
+          targetSectionId = newSection.id;
+        } else {
+          console.error("Failed to create section");
+          return;
+        }
+      }
 
-  const addTask = () => {
-    if (!newTaskText.trim()) return;
-
-    setSections((prev) =>
-      prev.map((section) => {
-        if (section.id === selectedSectionId) {
-          const newTask = {
-            id: Date.now().toString(),
+      // 2. Create Task (Only if we have a title)
+      if (newTaskText.trim() && targetSectionId) {
+        const res = await fetch(`${backendUrl}/tasks/tasks`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            sectionId: targetSectionId,
             title: newTaskText,
             status: "Pending",
             due: "Soon",
-          };
-          return { ...section, tasks: [newTask, ...section.tasks] };
-        }
-        return section;
-      })
-    );
+            dueDate: date.toISOString().split("T")[0], // YYYY-MM-DD
+            dueTime: date.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          }),
+        });
 
-    setModalVisible(false);
-    setNewTaskText("");
+        if (res.ok) {
+          setModalVisible(false);
+          setNewTaskText("");
+          // Reset date? maybe keep it as today
+          setNewSectionTitle("");
+          setIsAddingSection(false);
+          fetchSections();
+        }
+      } else if (isAddingSection && targetSectionId) {
+        // Case: Only created a section, no task title provided
+        setModalVisible(false);
+        setNewSectionTitle("");
+        setIsAddingSection(false);
+        fetchSections();
+      }
+    } catch (error) {
+      console.error("Failed to add", error);
+    }
   };
 
   return (
@@ -146,107 +286,132 @@ export default function TasksScreen() {
           <Text style={styles.pageSubtitle}>Track your progress</Text>
         </View>
 
-        <View style={styles.sectionsContainer}>
-          {sections.map((section, sectionIndex) => (
-            <View key={section.id} style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <IconSymbol
-                  name={section.icon as any}
-                  size={16}
-                  color={section.color}
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{section.tasks.length}</Text>
+        {sections.length > 0 ? (
+          <View style={styles.sectionsContainer}>
+            {sections.map((section, sectionIndex) => (
+              <View key={section.id} style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <IconSymbol
+                    name={section.icon as any}
+                    size={16}
+                    color={section.color}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.sectionTitle}>{section.title}</Text>
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{section.tasks.length}</Text>
+                  </View>
                 </View>
-              </View>
 
-              <View style={styles.taskList}>
-                {section.tasks.map((task, index) => (
-                  <Animated.View
-                    key={task.id}
-                    entering={FadeInUp.delay((sectionIndex * 2 + index) * 50)
-                      .springify()
-                      .damping(30)
-                      .stiffness(200)}
-                    layout={Layout.springify().damping(30).stiffness(200)}
-                  >
-                    <TouchableOpacity
-                      style={styles.taskItem}
-                      activeOpacity={0.7}
-                      onPress={() => toggleTaskStatus(section.id, task.id)}
+                <View style={styles.taskList}>
+                  {section.tasks.map((task: any, index: number) => (
+                    <Animated.View
+                      key={task.id}
+                      entering={FadeInUp.delay((sectionIndex * 2 + index) * 50)
+                        .springify()
+                        .damping(30)
+                        .stiffness(200)}
+                      layout={Layout.springify().damping(30).stiffness(200)}
                     >
-                      <View
-                        style={[
-                          styles.checkbox,
-                          task.status === "Done" && styles.checkboxChecked,
-                        ]}
-                      >
-                        {task.status === "Done" && (
-                          <IconSymbol name="checkmark" size={12} color="#FFF" />
-                        )}
-                      </View>
-
-                      <View style={styles.taskContent}>
-                        <Text
-                          style={[
-                            styles.taskTitle,
-                            task.status === "Done" && styles.taskTitleDone,
-                          ]}
-                        >
-                          {task.title}
-                        </Text>
-                        <Text style={styles.taskDue}>Due {task.due}</Text>
-                      </View>
-
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
+                      <TouchableOpacity
+                        style={styles.taskItem}
+                        activeOpacity={0.7}
+                        onPress={() => toggleTaskStatus(section.id, task.id)}
                       >
                         <View
                           style={[
-                            styles.statusTag,
-                            {
-                              backgroundColor:
-                                task.status === "Critical"
-                                  ? "#FFEAA7"
-                                  : "#dfe6e9",
-                            },
+                            styles.checkbox,
+                            task.status === "Done" && styles.checkboxChecked,
                           ]}
                         >
+                          {task.status === "Done" && (
+                            <IconSymbol
+                              name="checkmark"
+                              size={12}
+                              color="#FFF"
+                            />
+                          )}
+                        </View>
+
+                        <View style={styles.taskContent}>
                           <Text
                             style={[
-                              styles.statusText,
-                              {
-                                color:
-                                  task.status === "Critical"
-                                    ? "#D63031"
-                                    : "#636E72",
-                              },
+                              styles.taskTitle,
+                              task.status === "Done" && styles.taskTitleDone,
                             ]}
                           >
-                            {task.status}
+                            {task.title}
+                          </Text>
+                          <Text style={styles.taskDue}>
+                            {task.dueDate
+                              ? `Due ${task.dueDate}${
+                                  task.dueTime ? " at " + task.dueTime : ""
+                                }`
+                              : `Due ${task.due}`}
                           </Text>
                         </View>
 
-                        <TouchableOpacity
-                          onPress={() => deleteTask(section.id, task.id)}
-                          style={{ padding: 4 }}
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
                         >
-                          <IconSymbol name="xmark" size={12} color="#B2BEC3" />
-                        </TouchableOpacity>
-                      </View>
-                    </TouchableOpacity>
-                  </Animated.View>
-                ))}
+                          <View
+                            style={[
+                              styles.statusTag,
+                              {
+                                backgroundColor:
+                                  task.status === "Critical"
+                                    ? "#FFEAA7"
+                                    : "#dfe6e9",
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusText,
+                                {
+                                  color:
+                                    task.status === "Critical"
+                                      ? "#D63031"
+                                      : "#636E72",
+                                },
+                              ]}
+                            >
+                              {task.status}
+                            </Text>
+                          </View>
+
+                          <TouchableOpacity
+                            onPress={() => deleteTask(section.id, task.id)}
+                            style={{ padding: 4 }}
+                          >
+                            <IconSymbol
+                              name="xmark"
+                              size={12}
+                              color="#B2BEC3"
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  ))}
+                </View>
               </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <IconSymbol
+              name="list.bullet.rectangle"
+              size={48}
+              color="#D1D8E0"
+            />
+            <Text style={styles.emptyStateText}>No tasks found</Text>
+          </View>
+        )}
       </ScrollView>
 
       {/* Modal for New Task */}
@@ -262,8 +427,15 @@ export default function TasksScreen() {
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Task</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalTitle}>
+                {isAddingSection ? "New Section" : "New Task"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setModalVisible(false);
+                  setIsAddingSection(false);
+                }}
+              >
                 <IconSymbol
                   name="xmark.circle.fill"
                   size={24}
@@ -273,46 +445,147 @@ export default function TasksScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Section</Text>
-              <View style={styles.sectionSelector}>
-                {sections.map((sec) => (
-                  <TouchableOpacity
-                    key={sec.id}
-                    style={[
-                      styles.sectionChip,
-                      selectedSectionId === sec.id && {
-                        backgroundColor: sec.color,
-                        borderColor: sec.color,
-                      },
-                    ]}
-                    onPress={() => setSelectedSectionId(sec.id)}
-                  >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "600",
+                    color: "#B2BEC3",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Section
+                </Text>
+                {isAddingSection && (
+                  <TouchableOpacity onPress={() => setIsAddingSection(false)}>
                     <Text
-                      style={[
-                        styles.sectionChipText,
-                        selectedSectionId === sec.id && { color: "#FFF" },
-                      ]}
+                      style={{
+                        fontSize: 12,
+                        color: "#0984E3",
+                        fontWeight: "600",
+                      }}
                     >
-                      {sec.title}
+                      Select Existing
                     </Text>
                   </TouchableOpacity>
-                ))}
+                )}
               </View>
+
+              {isAddingSection ? (
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="New Section Name (e.g. Shopping)"
+                  value={newSectionTitle}
+                  onChangeText={setNewSectionTitle}
+                  autoFocus
+                />
+              ) : (
+                <View style={styles.sectionSelector}>
+                  {sections.map((sec) => (
+                    <TouchableOpacity
+                      key={sec.id}
+                      style={[
+                        styles.sectionChip,
+                        selectedSectionId === sec.id && {
+                          backgroundColor: sec.color,
+                          borderColor: sec.color,
+                        },
+                      ]}
+                      onPress={() => setSelectedSectionId(sec.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.sectionChipText,
+                          selectedSectionId === sec.id && { color: "#FFF" },
+                        ]}
+                      >
+                        {sec.title}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity
+                    style={[styles.sectionChip, { borderStyle: "dashed" }]}
+                    onPress={() => setIsAddingSection(true)}
+                  >
+                    <IconSymbol name="plus" size={14} color="#636E72" />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Title</Text>
+              <Text style={styles.inputLabel}>Task Title</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="What needs to be done?"
                 value={newTaskText}
                 onChangeText={setNewTaskText}
-                autoFocus
               />
             </View>
 
-            <TouchableOpacity style={styles.saveButton} onPress={addTask}>
-              <Text style={styles.saveButtonText}>Add Task</Text>
+            <View style={{ flexDirection: "row", gap: 16, marginBottom: 24 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Due Date</Text>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {date.toLocaleDateString()}
+                  </Text>
+                  <IconSymbol name="calendar" size={16} color="#636E72" />
+                </TouchableOpacity>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Due Time</Text>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => setShowTimePicker(true)}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {date.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Text>
+                  <IconSymbol name="clock.fill" size={16} color="#636E72" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {showDatePicker && (
+              <DateTimePicker
+                testID="dateTimePicker"
+                value={date}
+                mode="date"
+                is24Hour={true}
+                display="default"
+                onChange={onChangeDate}
+              />
+            )}
+
+            {showTimePicker && (
+              <DateTimePicker
+                testID="dateTimePicker"
+                value={date}
+                mode="time"
+                is24Hour={false} // 12h format
+                display="default"
+                onChange={onChangeTime}
+              />
+            )}
+
+            <TouchableOpacity style={styles.saveButton} onPress={handleAdd}>
+              <Text style={styles.saveButtonText}>
+                {isAddingSection ? "Create & Add Task" : "Add Task"}
+              </Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -532,5 +805,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#636E72",
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    gap: 12,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: "#B2BEC3",
+    fontWeight: "600",
+  },
+  emptyStateAction: {
+    fontSize: 14,
+    color: "#0984E3",
+    fontWeight: "600",
+  },
+  dateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F2F6",
+    paddingBottom: 8,
+    height: 40,
+  },
+  dateButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#000",
   },
 });

@@ -1,0 +1,181 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+    id    String @id @default(cuid())
+    email String @unique
+
+    ConversationLog ConversationLog[]
+    Memory Memory[]
+    Transaction Transaction[]
+    PendingTransaction PendingTransaction[]
+    ContentItem ContentItem[]
+    focusSessions FocusSession[]
+
+    coreMemories CoreMemory[]
+    TaskSection TaskSection[]
+    dailyLogs DailyLog[]
+}
+
+model ConversationLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  userRaw     String
+  aiResponse  String
+
+  // The Enricher Output (Stored here for debugging/analytics)
+  // Contains: { summary: "", synthetic_query: "", tags: [] }
+  enricherData Json?   
+
+  // Search Optimization
+  targetCategory String? // e.g., "health", "tasks", "general"
+
+  @@index([userId, targetCategory])
+  @@index([createdAt])
+}
+
+model CoreMemory {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  // The Fact
+  fact      String   // "User is allergic to peanuts"
+  category  String   // "health", "preference", "work"
+  certainty Float    // 0.0 to 1.0 (How sure is the AI?)
+
+  // Sync Status (To ensure ChromaDB stays updated)
+  isSynced  Boolean  @default(false) 
+
+  @@index([userId, category])
+}
+
+model Memory {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  title     String
+  content   String
+  tags      String[]
+
+  @@index([userId])
+}
+
+model TaskSection {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  title     String
+  icon      String
+  color     String
+  
+  tasks     Task[]
+  
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+}
+
+model Task {
+  id        String   @id @default(uuid())
+  sectionId String
+  section   TaskSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  
+  title     String
+  status    String
+  due       String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([sectionId])
+}
+
+model Transaction {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  title     String
+  subtitle  String?
+  amount    Float
+  type      String   // "income" or "expense"
+  
+  icon      String   @default("banknote")
+  iconBg    String   @default("#000000")
+
+  @@index([userId])
+}
+
+model PendingTransaction {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+
+  amount      String   // Keeping as string to match frontend input state
+  name        String
+  category    String
+  type        String   // "income" or "expense"
+  actionLabel String   // "Bills", "Send", "Request"
+
+  @@index([userId])
+}
+
+model ContentItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  type      String   // "WATCH", "READ", "SOCIAL"
+  title     String
+  subtitle  String?  // Category for Read, Platform for Watch/Social
+  platform  String?  // Netflix, Apple TV+, etc. (Or Source)
+  url       String?
+  progress  Float    @default(0.0)
+  isRead    Boolean  @default(false)
+  image     String?  // URL for poster or icon name
+  
+  // Custom metadata
+  notifications Int @default(0)
+
+  @@index([userId])
+}
+
+model FocusSession {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  startTime DateTime @default(now())
+  
+  mode      String   // "work", "study", "sleep", "detox"
+  duration  Int      // Planned duration in minutes
+  timeSpent Int      // Actual time spent in minutes
+  completed Boolean
+  reason    String?  // If exited early
+  
+  @@index([userId])
+}

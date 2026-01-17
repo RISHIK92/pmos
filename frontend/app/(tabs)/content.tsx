@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -17,7 +17,9 @@ import {
 import { FontAwesome } from "@expo/vector-icons";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SidebarContext } from "./_layout";
+import { auth } from "../../lib/firebase";
 import Animated, { FadeInUp, FadeInRight } from "react-native-reanimated";
+import { useNavigation } from "expo-router";
 
 const { width } = Dimensions.get("window");
 
@@ -122,20 +124,137 @@ const INITIAL_SOCIALS = [
     bg: "#E3F2FD",
     saved: [] as any[],
   },
+  {
+    id: "23",
+    title: "Reddit",
+    type: "Forum",
+    notifications: 12,
+    url: "https://reddit.com",
+    icon: "reddit-alien",
+    color: "#FF4500",
+    bg: "#FFF0E0",
+    saved: [] as any[],
+  },
 ];
+
+function getPlatformColor(platform: string) {
+  const p = platform.toLowerCase();
+  if (p.includes("netflix"))
+    return { color: "#E50914", gradient: ["#E50914", "#B20710"] };
+  if (p.includes("youtube"))
+    return { color: "#FF0000", gradient: ["#FF0000", "#D32F2F"] }; // Red/White handled by icon/text contrast usually
+  if (p.includes("apple"))
+    return { color: "#000000", gradient: ["#2C3E50", "#000000"] };
+  if (p.includes("hulu"))
+    return { color: "#1CE783", gradient: ["#1CE783", "#00A859"] };
+  if (p.includes("disney") || p.includes("hotstar"))
+    return { color: "#0984E3", gradient: ["#0984E3", "#001F3F"] }; // Dark Blue
+  if (p.includes("prime"))
+    return { color: "#00A8E1", gradient: ["#00A8E1", "#007EA7"] };
+
+  // Socials
+  if (p.includes("twitter") || p.includes("x"))
+    return { color: "#1DA1F2", gradient: ["#1DA1F2", "#0D47A1"] };
+  if (p.includes("instagram"))
+    return { color: "#E1306C", gradient: ["#E1306C", "#C13584"] };
+  if (p.includes("linkedin"))
+    return { color: "#0077B5", gradient: ["#0077B5", "#004B8D"] };
+  if (p.includes("reddit"))
+    return { color: "#FF4500", gradient: ["#FF4500", "#CC3700"] };
+
+  return { color: "#95A5A6", gradient: ["#95A5A6", "#7F8C8D"] };
+}
 
 export default function ContentScreen() {
   const { toggleSidebar } = useContext(SidebarContext);
-  const [watchlist, setWatchlist] = useState(INITIAL_WATCHLIST);
-  const [readingList, setReadingList] = useState(INITIAL_READING_LIST);
-  const [socials, setSocials] = useState(INITIAL_SOCIALS);
+  const navigation = useNavigation();
+  const [isLoading, setIsLoading] = useState(true);
+  const [watchlist, setWatchlist] = useState<any[]>([]);
+  const [readingList, setReadingList] = useState<any[]>([]);
+  const [socials, setSocials] = useState<any[]>(INITIAL_SOCIALS); // Keep hardcoded socials mixed with dynamic if needed, or fully dynamic. Let's make fully dynamic + defaults if empty
+
+  const backendUrl =
+    Platform.OS === "android"
+      ? "http://10.141.28.129:8000"
+      : "http://localhost:8000";
+
+  const fetchContent = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+
+      const res = await fetch(`${backendUrl}/content`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+
+        // Process Colors on Frontend
+        const processed = data.map((item: any) => {
+          const style = getPlatformColor(item.platform || item.title); // Use title for socials if platform missing
+          return { ...item, color: style.color, gradient: style.gradient };
+        });
+
+        const fetchedContent = processed;
+
+        // Populate Watchlist and Reading List
+        setWatchlist(fetchedContent.filter((i: any) => i.type === "WATCH"));
+        setReadingList(fetchedContent.filter((i: any) => i.type === "READ"));
+
+        // Map content to the 4 core socials
+        const updatedSocials = [...INITIAL_SOCIALS].map((social) => {
+          const platformKeywords =
+            social.title === "Twitter"
+              ? ["twitter", "x.com"]
+              : [social.title.toLowerCase()];
+
+          const socialItems = fetchedContent.filter((c: any) =>
+            platformKeywords.some(
+              (k) =>
+                (c.platform || "").toLowerCase().includes(k) ||
+                (c.url || "").toLowerCase().includes(k)
+            )
+          );
+
+          return {
+            ...social,
+            title: social.title === "Twitter" ? "X" : social.title, // Rename Twitter to X
+            notifications: socialItems.length, // Show count of items as notifications?
+            saved: socialItems,
+          };
+        });
+
+        setSocials(updatedSocials);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchContent();
+  }, []);
+
+  // Refetch when screen gains focus (handles ShareRequestHandler and other navigation returns)
+  useEffect(() => {
+    const unsubscribe = navigation?.addListener?.("focus", () => {
+      fetchContent();
+    });
+    return unsubscribe;
+  }, []);
 
   // Pagination State
   const [visibleArticles, setVisibleArticles] = useState(3);
 
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
-  const [newItemType, setNewItemType] = useState<"watch" | "read">("read");
+  const [newItemType, setNewItemType] = useState<"watch" | "read" | "social">(
+    "read"
+  ); // Added social
   const [newTitle, setNewTitle] = useState("");
   const [newSubtitle, setNewSubtitle] = useState(""); // Used for Platform (Watch) or Source/URL (Read)
 
@@ -152,59 +271,134 @@ export default function ContentScreen() {
     }
   };
 
-  const deleteWatchItem = (id: string) => {
-    setWatchlist((prev) => prev.filter((item) => item.id !== id));
+  const deleteItem = async (id: string, type: "WATCH" | "READ" | "SOCIAL") => {
+    // Optimistic
+    if (type === "WATCH")
+      setWatchlist((prev) => prev.filter((i) => i.id !== id));
+    if (type === "READ")
+      setReadingList((prev) => prev.filter((i) => i.id !== id));
+    if (type === "SOCIAL")
+      setSocials((prev) => prev.filter((i) => i.id !== id));
+
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+      await fetch(`${backendUrl}/content/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Refetch to update social shortcuts saved items
+      fetchContent();
+    } catch (e) {
+      console.error(e);
+      fetchContent(); // Revert
+    }
   };
 
-  const deleteReadItem = (id: string) => {
-    setReadingList((prev) => prev.filter((item) => item.id !== id));
+  const getPlatformFromUrl = (
+    url: string
+  ): { platform: string; isSocial: boolean } => {
+    const lowerUrl = url.toLowerCase();
+
+    if (
+      (lowerUrl.includes("twitter") || lowerUrl.includes("x.com")) &&
+      !lowerUrl.includes("netflix")
+    )
+      return { platform: "X", isSocial: true };
+    if (lowerUrl.includes("instagram"))
+      return { platform: "Instagram", isSocial: true };
+    if (lowerUrl.includes("linkedin"))
+      return { platform: "LinkedIn", isSocial: true };
+    if (lowerUrl.includes("reddit"))
+      return { platform: "Reddit", isSocial: true };
+
+    // Extract domain name from URL for other platforms (Netflix, YouTube, etc.)
+    try {
+      let domain = url.replace(/^(https?:\/\/)?(www\.)?/, ""); // Remove protocol and www
+      domain = domain.split("/")[0]; // Get just the domain part
+      domain = domain.split(".")[0]; // Get the main name (e.g., "netflix" from "netflix.com")
+
+      if (domain && domain.length > 0) {
+        // Capitalize first letter
+        return {
+          platform: domain.charAt(0).toUpperCase() + domain.slice(1),
+          isSocial: false,
+        };
+      }
+    } catch (e) {
+      // Fallback
+    }
+
+    return { platform: "Web", isSocial: false };
   };
 
-  const deleteSocialSavedItem = (socialId: string, savedItemId: string) => {
-    setSocials((prev) =>
-      prev.map((social) => {
-        if (social.id === socialId) {
-          return {
-            ...social,
-            saved: social.saved.filter((item) => item.id !== savedItemId),
-          };
-        }
-        return social;
-      })
-    );
-  };
-
-  const addItem = () => {
+  const addItem = async () => {
     if (!newTitle.trim()) return;
 
+    // Auto-detect platform from URL
+    const { platform: detectedPlatform, isSocial } =
+      getPlatformFromUrl(newSubtitle);
+    let finalType = newItemType;
+    let finalPlatform = newSubtitle;
+
+    // If user selected "watch", ALWAYS keep it as WATCH (continue watching)
+    // Just update the platform name from URL detection
     if (newItemType === "watch") {
-      const newItem = {
-        id: Date.now().toString(),
-        title: newTitle,
-        subtitle: "To Watch",
-        platform: newSubtitle || "Generic",
-        progress: 0,
-        color: "#95A5A6",
-        gradient: ["#95A5A6", "#7F8C8D"],
-      };
-      setWatchlist([newItem, ...watchlist]);
+      finalType = "watch";
+      finalPlatform =
+        detectedPlatform !== "Web" ? detectedPlatform : newSubtitle || "Video";
+    } else if (isSocial) {
+      // Only force to social if it's a social platform AND user didn't select watch
+      finalType = "social";
+      finalPlatform = detectedPlatform;
     } else {
-      const newItem = {
-        id: Date.now().toString(),
-        title: newTitle,
-        source: newSubtitle || "Web",
-        category: "General",
-        url: "https://google.com",
-        time: "5 min read",
-        read: false,
-        icon: "doc.text.fill",
-        color: "#000000",
-      };
-      setReadingList([newItem, ...readingList]);
+      // For read/other, use detected platform
+      finalPlatform =
+        detectedPlatform !== "Web" ? detectedPlatform : newSubtitle || "Web";
     }
-    setModalVisible(false);
-    setNewTitle("");
-    setNewSubtitle("");
+
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+
+      const typeMap = { watch: "WATCH", read: "READ", social: "SOCIAL" };
+
+      const payload = {
+        type: typeMap[finalType as keyof typeof typeMap] || "READ",
+        title: newTitle,
+        subtitle:
+          finalType === "watch"
+            ? "To Watch"
+            : finalType === "social"
+            ? finalPlatform
+            : finalPlatform, // For social/read, subtitle is source/platform
+        platform: finalPlatform,
+        url: newSubtitle.startsWith("http")
+          ? newSubtitle
+          : `https://${newSubtitle}`, // Ensure valid URL
+        progress: 0,
+        image: "globe",
+      };
+
+      const res = await fetch(`${backendUrl}/content`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        setModalVisible(false);
+        setNewTitle("");
+        setNewSubtitle("");
+        fetchContent();
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
@@ -258,19 +452,28 @@ export default function ContentScreen() {
                 entering={FadeInRight.delay(100 + index * 100).springify()}
                 style={styles.movieCard}
               >
-                {/* Poster Background */}
-                <View
-                  style={[
-                    styles.posterBackground,
-                    { backgroundColor: item.gradient[0] },
-                  ]}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => item.url && handleLinkPress(item.url)}
+                  style={{ flex: 1 }}
                 >
-                  <IconSymbol
-                    name="play.circle.fill"
-                    size={48}
-                    color="rgba(255,255,255,0.8)"
-                  />
-                </View>
+                  {/* Poster Background */}
+                  <View
+                    style={[
+                      styles.posterBackground,
+                      {
+                        backgroundColor:
+                          item.gradient?.[0] || item.color || "#636E72",
+                      },
+                    ]}
+                  >
+                    <IconSymbol
+                      name="play.circle.fill"
+                      size={48}
+                      color="rgba(255,255,255,0.8)"
+                    />
+                  </View>
+                </TouchableOpacity>
 
                 {/* Info Overlay */}
                 <View style={styles.movieInfo}>
@@ -300,7 +503,7 @@ export default function ContentScreen() {
                 {/* Delete Button */}
                 <TouchableOpacity
                   style={styles.deleteButton}
-                  onPress={() => deleteWatchItem(item.id)}
+                  onPress={() => deleteItem(item.id, "WATCH")}
                   activeOpacity={0.7}
                 >
                   <IconSymbol
@@ -336,73 +539,96 @@ export default function ContentScreen() {
           </View>
 
           <View style={styles.listContainer}>
-            {readingList.slice(0, visibleArticles).map((item, index) => (
-              <Animated.View
-                key={item.id}
-                entering={FadeInUp.delay(300 + index * 100)}
-              >
-                <TouchableOpacity
-                  style={styles.articleCard}
-                  onPress={() => handleLinkPress(item.url)}
-                >
-                  <View
-                    style={[
-                      styles.articleIconBox,
-                      {
-                        backgroundColor: item.read
-                          ? "#F5F6FA"
-                          : item.color + "15",
-                      },
-                    ]}
+            {isLoading ? (
+              <View style={styles.listEmptyState}>
+                <Text style={styles.listEmptyText}>Loading articles...</Text>
+              </View>
+            ) : readingList.length > 0 ? (
+              <>
+                {readingList.slice(0, visibleArticles).map((item, index) => (
+                  <Animated.View
+                    key={item.id}
+                    entering={FadeInUp.delay(300 + index * 100)}
                   >
-                    <IconSymbol
-                      name={item.icon as any}
-                      size={20}
-                      color={item.read ? "#B2BEC3" : item.color}
-                    />
-                  </View>
-
-                  <View style={styles.articleContent}>
-                    <Text
-                      style={[
-                        styles.articleTitle,
-                        item.read && styles.articleTitleRead,
-                      ]}
-                      numberOfLines={1}
+                    <TouchableOpacity
+                      style={styles.articleCard}
+                      onPress={() => handleLinkPress(item.url)}
                     >
-                      {item.title}
-                    </Text>
-                    <View style={styles.articleMetaRow}>
-                      <View style={styles.categoryBadge}>
-                        <Text style={styles.categoryText}>{item.category}</Text>
+                      <View
+                        style={[
+                          styles.articleIconBox,
+                          {
+                            backgroundColor: item.read
+                              ? "#F5F6FA"
+                              : "#0984E315",
+                          },
+                        ]}
+                      >
+                        <IconSymbol
+                          name="link"
+                          size={20}
+                          color={item.read ? "#B2BEC3" : "#0984E3"}
+                        />
                       </View>
-                      <Text style={styles.articleSource}>{item.source}</Text>
-                      <Text style={styles.bulletPoint}>•</Text>
-                      <Text style={styles.articleTime}>{item.time}</Text>
-                    </View>
-                  </View>
 
-                  {/* Trash Icon */}
+                      <View style={styles.articleContent}>
+                        <Text
+                          style={[
+                            styles.articleTitle,
+                            item.read && styles.articleTitleRead,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.title}
+                        </Text>
+                        <View style={styles.articleMetaRow}>
+                          <View style={styles.categoryBadge}>
+                            <Text style={styles.categoryText}>{item.type}</Text>
+                          </View>
+                          <Text style={styles.articleSource}>
+                            {item.platform}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Trash Icon */}
+                      <TouchableOpacity
+                        style={styles.articleDeleteBtn}
+                        onPress={() => deleteItem(item.id, "READ")}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <IconSymbol
+                          name="trash.fill"
+                          size={20}
+                          color="#FF7675"
+                        />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  </Animated.View>
+                ))}
+
+                {/* Load More Button */}
+                {visibleArticles < readingList.length && (
                   <TouchableOpacity
-                    style={styles.articleDeleteBtn}
-                    onPress={() => deleteReadItem(item.id)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.loadMoreButton}
+                    onPress={() => setVisibleArticles((prev) => prev + 3)}
                   >
-                    <IconSymbol name="trash.fill" size={20} color="#FF7675" />
+                    <Text style={styles.loadMoreText}>Load More</Text>
+                    <IconSymbol
+                      name="arrow.down.left"
+                      size={16}
+                      color="#0984E3"
+                    />
                   </TouchableOpacity>
-                </TouchableOpacity>
-              </Animated.View>
-            ))}
-
-            {/* Load More Button */}
-            {visibleArticles < readingList.length && (
-              <TouchableOpacity
-                style={styles.loadMoreButton}
-                onPress={() => setVisibleArticles((prev) => prev + 3)}
-              >
-                <Text style={styles.loadMoreText}>Load More</Text>
-                <IconSymbol name="arrow.down.left" size={16} color="#0984E3" />
-              </TouchableOpacity>
+                )}
+              </>
+            ) : (
+              <View style={styles.listEmptyState}>
+                <IconSymbol name="doc.text.fill" size={48} color="#D1D8E0" />
+                <Text style={styles.listEmptyText}>
+                  Your reading list is empty
+                </Text>
+              </View>
             )}
           </View>
         </View>
@@ -495,6 +721,22 @@ export default function ContentScreen() {
                   Video / Watch
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.typeChip,
+                  newItemType === "social" && styles.typeChipActive,
+                ]}
+                onPress={() => setNewItemType("social")}
+              >
+                <Text
+                  style={[
+                    styles.typeChipText,
+                    newItemType === "social" && styles.typeChipTextActive,
+                  ]}
+                >
+                  Social / Short
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.inputGroup}>
@@ -510,17 +752,18 @@ export default function ContentScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>
-                {newItemType === "watch" ? "Platform" : "Source / Publisher"}
+                {newItemType === "watch" ? "Platform (Optional)" : "Link / URL"}
               </Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder={
                   newItemType === "watch"
-                    ? "e.g. Netflix, YouTube"
-                    : "e.g. Medium, Dev.to"
+                    ? "e.g. Netflix or Source URL"
+                    : "Paste link (e.g. https://twitter.com/...)"
                 }
                 value={newSubtitle}
                 onChangeText={setNewSubtitle}
+                autoCapitalize="none"
               />
             </View>
 
@@ -576,57 +819,47 @@ export default function ContentScreen() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.modalSectionTitle}>Saved Items</Text>
               {selectedSocial.saved && selectedSocial.saved.length > 0 ? (
-                <View style={styles.savedList}>
-                  {selectedSocial.saved.map((savedItem: any) => (
-                    <View key={savedItem.id} style={styles.savedItem}>
-                      <View
-                        style={[
-                          styles.savedIconBox,
-                          { backgroundColor: selectedSocial.color + "10" },
-                        ]}
-                      >
-                        <IconSymbol
-                          name="bookmark.fill"
-                          size={16}
-                          color={selectedSocial.color}
-                        />
-                      </View>
-                      <View style={styles.savedContent}>
-                        <Text style={styles.savedTitle}>{savedItem.title}</Text>
-                        <Text style={styles.savedMeta}>
-                          {savedItem.type} • {savedItem.time}
+                <ScrollView style={{ maxHeight: 400, marginTop: 16 }}>
+                  {selectedSocial.saved.map((item: any) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.articleCard}
+                      onPress={() => handleLinkPress(item.url)}
+                    >
+                      <View style={styles.articleContent}>
+                        <Text style={styles.articleTitle} numberOfLines={2}>
+                          {item.title}
+                        </Text>
+                        <Text style={styles.articleSource} numberOfLines={1}>
+                          {item.url}
                         </Text>
                       </View>
-
-                      {/* Delete Saved Item Button */}
                       <TouchableOpacity
-                        onPress={() =>
-                          deleteSocialSavedItem(selectedSocial.id, savedItem.id)
-                        }
-                        style={styles.savedItemDeleteBtn}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={() => deleteItem(item.id, item.type)}
+                        style={{ padding: 8 }}
                       >
                         <IconSymbol
-                          name="minus.circle.fill"
-                          size={20}
+                          name="trash.fill"
+                          size={16}
                           color="#FF7675"
                         />
                       </TouchableOpacity>
-                    </View>
+                    </TouchableOpacity>
                   ))}
-                </View>
+                </ScrollView>
               ) : (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>No saved items yet.</Text>
+                  <Text style={styles.emptyText}>
+                    No saved content for {selectedSocial.title}
+                  </Text>
                 </View>
               )}
 
               <TouchableOpacity
                 style={[
                   styles.openAppButton,
-                  { backgroundColor: selectedSocial.color },
+                  { backgroundColor: selectedSocial.color, marginTop: 16 },
                 ]}
                 onPress={() => handleLinkPress(selectedSocial.url)}
               >
@@ -737,17 +970,23 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   addNewCard: {
-    backgroundColor: "#F5F6FA",
+    backgroundColor: "#F9F9F9",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#E1E1E1",
     borderStyle: "dashed",
-    gap: 12,
+    gap: 8,
+    // Override inherited shadow
+    shadowColor: "transparent",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   addNewText: {
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "500",
     color: "#B2BEC3",
   },
   posterBackground: {
@@ -901,7 +1140,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     paddingHorizontal: 20,
     gap: 24, // Wider gap for cleaner look
-    justifyContent: "flex-start",
+    justifyContent: "center",
   },
   socialItemWrapper: {
     alignItems: "center",
@@ -1111,5 +1350,15 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 16,
     fontWeight: "700",
+  },
+  listEmptyState: {
+    paddingVertical: 48,
+    alignItems: "center",
+    gap: 12,
+  },
+  listEmptyText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#B2BEC3",
   },
 });

@@ -56,7 +56,18 @@
           "microphonePermission": "PMOS needs access to your microphone to record voice notes."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-share-intent",
+        {
+          "android": {
+            "intentFilters": [
+              { "action": "SEND", "data": { "mimeType": "text/plain" } },
+              { "action": "SEND", "data": { "mimeType": "*/*" } }
+            ]
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
