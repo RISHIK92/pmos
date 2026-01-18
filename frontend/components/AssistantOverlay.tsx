@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import AppLauncher from "../utils/AppLauncher";
 import {
   View,
   Text,
@@ -16,7 +17,6 @@ import {
 } from "react-native";
 import Animated, {
   useSharedValue,
-  withRepeat,
   withTiming,
   useAnimatedStyle,
   Easing,
@@ -32,7 +32,7 @@ const { width } = Dimensions.get("window");
 
 // --- Noise Gate Thresholds ---
 const MIN_DURATION = 1200; // 1.2 second minimum
-const MIN_VOLUME = -50; // dB threshold (below this is background noise)
+const MIN_VOLUME = -35; // dB threshold (below this is background noise)
 const INITIAL_SILENCE_TIMEOUT = 4000; // 4 seconds before user speaks
 const SPEECH_SILENCE_TIMEOUT = 2000; // 2 seconds after user started speaking
 
@@ -43,58 +43,129 @@ export default function AssistantOverlay() {
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [isProcessingText, setIsProcessingText] = useState(false);
   const [response, setResponse] = useState<string | null>(null);
-  const [requestCount, setRequestCount] = useState(0);
+  const [lastUserQuery, setLastUserQuery] = useState<string | null>(null);
   const router = useRouter();
-
-  // Animation Values
   const pulseScale = useSharedValue(1);
 
-  // Recording state - using ref to avoid async state issues
+  // Refs
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingStartTime = useRef<number>(0);
   const maxVolumeRef = useRef<number>(-160);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const silenceTimerRef = useRef<any>(null);
   const lastSoundTimeRef = useRef<number>(0);
-  const isListeningRef = useRef<boolean>(false); // Ref to avoid stale closure
-  const hasSpokenRef = useRef<boolean>(false); // Track if user has started speaking
-
-  // Back handler
-  useEffect(() => {
-    const backAction = () => {
-      handleDismiss();
-      return true;
-    };
-    const backHandler = BackHandler.addEventListener(
-      "hardwareBackPress",
-      backAction
-    );
-    return () => backHandler.remove();
-  }, []);
+  const isListeningRef = useRef<boolean>(false);
+  const hasSpokenRef = useRef<boolean>(false);
+  const hasAutoStartedRef = useRef<boolean>(false);
 
   // Auto-start recording on mount
   useEffect(() => {
-    startRecording();
+    // Preload apps
+    AppLauncher.preloadApps();
+
+    if (!hasAutoStartedRef.current) {
+      hasAutoStartedRef.current = true;
+      // Small delay to ensure component is fully mounted
+      setTimeout(() => {
+        startRecording();
+      }, 300);
+    }
+
+    // Cleanup on unmount
     return () => {
-      // Cleanup on unmount
-      if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
+      if (silenceTimerRef.current) {
+        clearInterval(silenceTimerRef.current);
+      }
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(console.error);
+      }
     };
   }, []);
 
-  // Pulse animation when listening
+  // Pulse animation for mic
   useEffect(() => {
     if (isListening) {
       pulseScale.value = withRepeat(
         withSequence(
-          withTiming(1.1, { duration: 500, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 500, easing: Easing.inOut(Easing.ease) })
+          withTiming(1.1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) })
         ),
         -1,
         false
       );
     } else {
-      pulseScale.value = withTiming(1);
+      pulseScale.value = withTiming(1, { duration: 200 });
     }
   }, [isListening]);
+
+  // Process Query Logic
+  const processQuery = async (queryText: string) => {
+    if (!queryText.trim()) return;
+
+    setLastUserQuery(queryText);
+    setInputText("");
+    setResponse(null);
+    setIsProcessingText(true);
+
+    const backendUrl =
+      Platform.OS === "android"
+        ? "http://10.141.28.129:8000"
+        : "http://localhost:8000";
+
+    try {
+      const res = await fetch(`${backendUrl}/query/query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: queryText }),
+      });
+      const data = await res.json();
+
+      setIsProcessingText(false);
+
+      if (data && data.response) {
+        setResponse(data.response);
+      } else if (data) {
+        setResponse(JSON.stringify(data));
+      }
+    } catch (error) {
+      console.error("Failed to process query", error);
+      setIsProcessingText(false);
+      setResponse("Failed to get response. Please try again.");
+    }
+  };
+
+  const handleTextSubmit = async () => {
+    const result = inputText.trim();
+    if (result) {
+      console.log("📝 Transcribed:", result);
+
+      // 🚀 Smart Prefilter: Check for App Launch command
+      const launchMatch = result.trim().match(/^(?:open|launch)\s+(.+)/i);
+
+      if (launchMatch) {
+        const appName = launchMatch[1];
+        console.log(`🚀 Attempting to launch app: ${appName}`);
+
+        setInputText("");
+        setLastUserQuery(result);
+        setIsProcessingText(true);
+
+        const launched = await AppLauncher.findAndOpen(appName);
+
+        if (launched) {
+          setIsProcessingText(false);
+          setResponse(`Opening ${appName}...`);
+          setTimeout(() => handleDismiss(), 2000);
+          return;
+        } else {
+          console.log("⚠️ App not found, blocking fallback");
+          setIsProcessingText(false);
+          setResponse(`App "${appName}" not found locally.`);
+          return;
+        }
+      }
+      processQuery(inputText);
+    }
+  };
 
   const startRecording = async () => {
     // Guard: Don't start if already recording
@@ -122,17 +193,15 @@ export default function AssistantOverlay() {
       recordingStartTime.current = Date.now();
       maxVolumeRef.current = -160;
       lastSoundTimeRef.current = Date.now();
-      hasSpokenRef.current = false; // Reset speech detection
+      hasSpokenRef.current = false;
 
       const { recording: newRecording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY,
         (status) => {
-          // Track loudness via metering
           if (status.metering !== undefined) {
             if (status.metering > maxVolumeRef.current) {
               maxVolumeRef.current = status.metering;
             }
-            // If sound is above threshold, update last sound time and mark as spoken
             if (status.metering > MIN_VOLUME) {
               lastSoundTimeRef.current = Date.now();
               if (!hasSpokenRef.current) {
@@ -142,24 +211,21 @@ export default function AssistantOverlay() {
             }
           }
         },
-        100 // Check every 100ms
+        100
       );
 
       recordingRef.current = newRecording;
       setIsListening(true);
-      isListeningRef.current = true; // Update ref for interval check
+      isListeningRef.current = true;
 
       // Start silence detection timer
       silenceTimerRef.current = setInterval(() => {
         const timeSinceSound = Date.now() - lastSoundTimeRef.current;
-
-        // Use different timeout based on whether user has spoken
         const timeout = hasSpokenRef.current
           ? SPEECH_SILENCE_TIMEOUT
           : INITIAL_SILENCE_TIMEOUT;
         const status = hasSpokenRef.current ? "AFTER_SPEECH" : "WAITING";
 
-        // Log dB every 500ms for debugging
         console.log(
           `🔊 [${status}] Volume: ${maxVolumeRef.current}dB | Silence: ${timeSinceSound}ms / ${timeout}ms`
         );
@@ -173,18 +239,21 @@ export default function AssistantOverlay() {
       }, 500);
     } catch (err) {
       console.error("Failed to start recording", err);
+      Alert.alert(
+        "Recording Error",
+        "Failed to start recording. Please try again."
+      );
     }
   };
 
   const stopRecording = async () => {
-    // Clear silence timer
     if (silenceTimerRef.current) {
       clearInterval(silenceTimerRef.current);
       silenceTimerRef.current = null;
     }
 
     setIsListening(false);
-    isListeningRef.current = false; // Update ref
+    isListeningRef.current = false;
 
     if (!recordingRef.current) return;
 
@@ -192,28 +261,13 @@ export default function AssistantOverlay() {
       await recordingRef.current.stopAndUnloadAsync();
       const uri = recordingRef.current.getURI();
 
-      // --- 🛡️ THE NOISE GATE FILTER ---
       const duration = Date.now() - recordingStartTime.current;
-
-      console.log(
-        `🎤 Stats -> Duration: ${duration}ms | Max Volume: ${maxVolumeRef.current}dB`
-      );
-
-      // Duration check
-      if (duration < MIN_DURATION) {
-        console.log("❌ Ignored: Recording too short (Accidental tap?)");
+      if (duration < MIN_DURATION || maxVolumeRef.current < MIN_VOLUME) {
+        console.log("❌ Ignored: Too short or too quiet.");
         recordingRef.current = null;
         return;
       }
 
-      // Volume check
-      if (maxVolumeRef.current < MIN_VOLUME) {
-        console.log("❌ Ignored: Voice too low (Background noise only)");
-        recordingRef.current = null;
-        return;
-      }
-
-      // --- ✅ PASSED CHECKS: PROCEED TO UPLOAD ---
       recordingRef.current = null;
 
       if (uri) {
@@ -238,17 +292,45 @@ export default function AssistantOverlay() {
             headers: {},
           });
           const result = await response.json();
-
           setIsProcessingVoice(false);
 
           if (result) {
-            // Show transcribed text in input box instead of routing
             console.log("📝 Transcribed:", result);
-            setInputText(result);
+
+            // 🚀 Smart Prefilter: Check for App Launch command
+            const launchMatch = result.trim().match(/^(?:open|launch)\s+(.+)/i);
+
+            if (launchMatch) {
+              const appName = launchMatch[1];
+              console.log(`🚀 Attempting to launch app: ${appName}`);
+
+              // Set UI immediately to show what we heard
+              setLastUserQuery(result);
+              setIsProcessingText(true); // Show thinking state
+
+              const launched = await AppLauncher.findAndOpen(appName);
+
+              if (launched) {
+                setIsProcessingText(false);
+                setResponse(`Opening ${appName}...`);
+                // Close overlay after short delay
+                setTimeout(() => handleDismiss(), 2000);
+                return;
+              } else {
+                console.log("⚠️ App not found, blocking fallback");
+                setIsProcessingText(false);
+                setResponse(`App "${appName}" not found locally.`);
+                return;
+              }
+            }
+
+            // Fallback: Auto-Send Transcribed Text to AI unless it was a failed launch command
+            processQuery(result);
           }
         } catch (error) {
           console.error("Failed to process voice", error);
           setIsProcessingVoice(false);
+          Alert.alert("Processing Error", "Failed to process voice input.");
         }
       }
     } catch (error) {
@@ -259,7 +341,7 @@ export default function AssistantOverlay() {
   const handleOpenApp = () => {
     if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
     if (recordingRef.current) {
-      recordingRef.current.stopAndUnloadAsync();
+      recordingRef.current.stopAndUnloadAsync().catch(console.error);
       recordingRef.current = null;
     }
     setVisible(false);
@@ -274,65 +356,19 @@ export default function AssistantOverlay() {
     }
   };
 
-  const handleTextSubmit = async () => {
-    if (!inputText.trim()) return;
-
-    if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
-    if (recordingRef.current) {
-      recordingRef.current.stopAndUnloadAsync();
-      recordingRef.current = null;
-    }
-
-    const currentRequest = requestCount + 1;
-    setRequestCount(currentRequest);
-
-    // Always handle in overlay, replacing previous response
-    setIsProcessingText(true);
-    const query = inputText;
-    setInputText(""); // Clear input while processing
-
-    const backendUrl =
-      Platform.OS === "android"
-        ? "http://10.141.28.129:8000"
-        : "http://localhost:8000";
-
-    try {
-      const res = await fetch(`${backendUrl}/query/query`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query: query }),
-      });
-      const data = await res.json();
-
-      setIsProcessingText(false);
-
-      if (data && data.response) {
-        setResponse(data.response);
-      } else if (data) {
-        setResponse(JSON.stringify(data));
-      }
-    } catch (error) {
-      console.error("Failed to process query", error);
-      setIsProcessingText(false);
-      setResponse("Failed to get response. Please try again.");
-    }
-  };
+  const animatedMicStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
 
   const handleDismiss = () => {
     if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
     if (recordingRef.current) {
-      recordingRef.current.stopAndUnloadAsync();
+      recordingRef.current.stopAndUnloadAsync().catch(console.error);
       recordingRef.current = null;
     }
     setVisible(false);
     setTimeout(() => BackHandler.exitApp(), 100);
   };
-
-  const animatedMicStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-  }));
 
   if (!visible) return null;
 
@@ -347,37 +383,26 @@ export default function AssistantOverlay() {
       </TouchableWithoutFeedback>
 
       <Animated.View style={styles.barWrapper}>
-        {Platform.OS === "ios" ? (
-          <BlurView intensity={30} tint="light" style={styles.glassContainer}>
-            <OverlayContent
-              handleOpenApp={handleOpenApp}
-              inputText={inputText}
-              setInputText={setInputText}
-              handleTextSubmit={handleTextSubmit}
-              handleVoice={handleVoice}
-              animatedMicStyle={animatedMicStyle}
-              isListening={isListening}
-              isProcessingVoice={isProcessingVoice}
-              isProcessingText={isProcessingText}
-              response={response}
-            />
-          </BlurView>
-        ) : (
-          <View style={[styles.glassContainer, styles.androidGlass]}>
-            <OverlayContent
-              handleOpenApp={handleOpenApp}
-              inputText={inputText}
-              setInputText={setInputText}
-              handleTextSubmit={handleTextSubmit}
-              handleVoice={handleVoice}
-              animatedMicStyle={animatedMicStyle}
-              isListening={isListening}
-              isProcessingVoice={isProcessingVoice}
-              isProcessingText={isProcessingText}
-              response={response}
-            />
-          </View>
-        )}
+        <View
+          style={[
+            styles.glassContainer,
+            Platform.OS === "android" && styles.androidGlass,
+          ]}
+        >
+          <OverlayContent
+            handleOpenApp={handleOpenApp}
+            inputText={inputText}
+            setInputText={setInputText}
+            handleTextSubmit={handleTextSubmit}
+            handleVoice={handleVoice}
+            animatedMicStyle={animatedMicStyle}
+            isListening={isListening}
+            isProcessingVoice={isProcessingVoice}
+            isProcessingText={isProcessingText}
+            response={response}
+            lastUserQuery={lastUserQuery}
+          />
+        </View>
       </Animated.View>
     </KeyboardAvoidingView>
   );
@@ -394,12 +419,12 @@ const OverlayContent = ({
   isProcessingVoice,
   isProcessingText,
   response,
+  lastUserQuery,
 }: any) => {
   const showSend = inputText.length > 0;
 
   return (
     <View style={styles.contentContainer}>
-      {/* Top Row: Open App Chip */}
       <View style={styles.topRow}>
         <TouchableOpacity onPress={handleOpenApp} style={styles.openAppChip}>
           <Ionicons name="apps" size={16} color="#4A4A4A" />
@@ -407,45 +432,54 @@ const OverlayContent = ({
         </TouchableOpacity>
       </View>
 
-      {/* Response Display */}
-      {(isProcessingText || response) && (
-        <View style={styles.responseContainer}>
-          <View style={styles.responseHeader}>
-            <View style={styles.responseIcon}>
-              <Ionicons
-                name={isProcessingText ? "sparkles" : "chatbubble-ellipses"}
-                size={16}
-                color="#4285F4"
-              />
+      {/* CHAT UI AREA */}
+      <View style={styles.chatArea}>
+        {/* User Query (Right) */}
+        {lastUserQuery && (
+          <View style={styles.userBubbleContainer}>
+            <View style={styles.userBubble}>
+              <Text style={styles.userText}>{lastUserQuery}</Text>
             </View>
           </View>
-          {!isProcessingText && response && (
-            <Text style={styles.responseText}>{response}</Text>
-          )}
-          {isProcessingText && (
-            <View style={styles.dotsContainer}>
-              <Text style={styles.dots}>• • •</Text>
-            </View>
-          )}
-        </View>
-      )}
+        )}
 
-      {/* Main Row: Input + Voice/Send */}
+        {/* AI Response (Left) */}
+        {(isProcessingText || response) && (
+          <View style={styles.aiBubbleContainer}>
+            <View style={styles.aiIcon}>
+              <Ionicons
+                name={isProcessingText ? "sparkles" : "radio-button-on"}
+                size={14}
+                color="#FFF"
+              />
+            </View>
+            <View style={styles.aiBubble}>
+              {isProcessingText ? (
+                <Text style={styles.processingDot}>• • •</Text>
+              ) : (
+                <Text style={styles.aiText}>{response}</Text>
+              )}
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* Input Row */}
       <View style={styles.inputRow}>
         <TextInput
           style={styles.textInput}
-          placeholder="Type a request..."
+          placeholder="Ask anything..."
           placeholderTextColor="#999"
           value={inputText}
           onChangeText={setInputText}
           onSubmitEditing={handleTextSubmit}
-          returnKeyType="search"
+          returnKeyType="send"
         />
 
         {showSend ? (
           <TouchableOpacity onPress={handleTextSubmit} activeOpacity={0.7}>
             <View style={[styles.micButton, styles.sendButton]}>
-              <Ionicons name="arrow-forward" size={24} color="#FFF" />
+              <Ionicons name="arrow-up" size={24} color="#FFF" />
             </View>
           </TouchableOpacity>
         ) : (
@@ -456,7 +490,7 @@ const OverlayContent = ({
           >
             {isProcessingVoice ? (
               <View style={[styles.micButton, styles.waveformButton]}>
-                <ActivityIndicator size="small" color="#636E72" />
+                <ActivityIndicator size="small" color="#000" />
               </View>
             ) : isListening ? (
               <View style={[styles.micButton, styles.waveformButton]}>
@@ -528,13 +562,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#4A4A4A",
   },
-  statusText: {
-    textAlign: "center",
-    fontSize: 14,
-    color: "#636E72",
-    marginBottom: 12,
-    fontWeight: "500",
-  },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -573,58 +600,62 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     overflow: "hidden",
   },
-  processingButton: {
-    backgroundColor: "#B2BEC3",
-    borderColor: "#B2BEC3",
+  chatArea: {
+    marginBottom: 20,
+    gap: 16,
+    minHeight: 100,
+    justifyContent: "flex-end",
   },
-  responseContainer: {
-    backgroundColor: "rgba(241, 243, 244, 0.6)", // Semi-transparent background
+  userBubbleContainer: {
+    alignItems: "flex-end",
+    marginLeft: 40,
+  },
+  userBubble: {
+    backgroundColor: "#4285F4",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
-    maxHeight: 200,
-    borderWidth: 1,
-    borderColor: "rgba(0, 0, 0, 0.05)", // Subtle border
+    borderBottomRightRadius: 4,
+    maxWidth: "100%",
   },
-  responseHeader: {
+  userText: {
+    fontSize: 15,
+    color: "#FFFFFF",
+    lineHeight: 20,
+  },
+  aiBubbleContainer: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
+    alignItems: "flex-end",
+    marginRight: 20,
   },
-  responseIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "rgba(66, 133, 244, 0.1)",
+  aiIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#636E72",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 8,
+    marginBottom: 4,
   },
-  responseLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#636E72",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+  aiBubble: {
+    backgroundColor: "#F1F3F4",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderBottomLeftRadius: 4,
+    flex: 1,
   },
-  processingText: {
-    fontSize: 14,
-    color: "#636E72",
-    fontStyle: "italic",
-  },
-  responseText: {
+  aiText: {
     fontSize: 15,
     color: "#2D3436",
     lineHeight: 22,
-    fontWeight: "400",
-    marginLeft: 6,
   },
-  dotsContainer: {
-    marginTop: 4,
-  },
-  dots: {
-    fontSize: 18,
-    color: "#4285F4",
-    letterSpacing: 4,
+  processingDot: {
+    fontSize: 24,
+    color: "#B2BEC3",
+    lineHeight: 24,
+    marginTop: -8,
+    letterSpacing: 2,
   },
 });
