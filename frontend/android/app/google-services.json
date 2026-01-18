@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "259162332596",
+    "project_id": "pmos-fb3ee",
+    "storage_bucket": "pmos-fb3ee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:259162332596:android:6f79e6d603978fa3faa6e1",
+        "android_client_info": {
+          "package_name": "com.rishik.pmos"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "259162332596-1n34g91i5e7qte51e7kcdote5k9f2va5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB9_Hpni-ERvbbCoYOdQyHTtrMa8BgJTT0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "259162332596-1n34g91i5e7qte51e7kcdote5k9f2va5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

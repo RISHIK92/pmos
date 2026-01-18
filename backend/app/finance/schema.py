@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from pydantic.config import ConfigDict
 
 from app.finance.accounts.schema import BankAccount
 
@@ -29,6 +30,7 @@ class TransactionResponse(BaseModel):
     createdAt: datetime
     excludeFromBalance: bool
     account: Optional[BankAccount] = None
+    model_config = ConfigDict(from_attributes=True)
 
 class PendingTransactionCreate(BaseModel):
     amount: str

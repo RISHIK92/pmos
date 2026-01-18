@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -10,38 +10,44 @@ import {
   Dimensions,
   Switch,
   Image,
+  Linking,
+  Platform,
+  PermissionsAndroid,
+  Alert,
 } from "react-native";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SidebarContext } from "./_layout";
 import Animated, { FadeInUp } from "react-native-reanimated";
+import { auth } from "../../lib/firebase";
+import { onAuthStateChanged, User } from "firebase/auth";
 
 const { width } = Dimensions.get("window");
 
-// Mock Data
-const INTEGRATIONS = [
+// Base Data
+const INTEGRATIONS_BASE = [
   {
     id: "1",
     name: "GitHub",
-    icon: "github", // FontAwesome
+    icon: "github",
     color: "#000000",
     bg: "#F5F5F5",
-    connected: true,
-    desc: "Connected as @rishik",
+    connected: false,
+    desc: "Not Connected",
   },
   {
     id: "2",
     name: "Google",
-    icon: "google", // FontAwesome
+    icon: "google",
     color: "#DB4437",
     bg: "#FEF2F1",
-    connected: true,
-    desc: "rishik@pmos.ai",
+    connected: false,
+    desc: "Not Connected",
   },
   {
     id: "3",
     name: "Slack",
-    icon: "pencil", // FontAwesome
+    icon: "pencil",
     color: "#000000",
     bg: "#FFF",
     connected: false,
@@ -49,56 +55,117 @@ const INTEGRATIONS = [
   },
 ];
 
-const PERMISSIONS = [
+const PERMISSIONS_BASE = [
   {
-    id: "1",
-    name: "Notifications",
-    icon: "bell.fill",
-    color: "#000", // Minimal black
-    enabled: true,
-  },
-  {
-    id: "2",
-    name: "Location Services",
-    icon: "location.fill",
-    color: "#000",
+    id: "sms",
+    name: "SMS Access",
+    icon: "message.fill",
+    permission: PermissionsAndroid.PERMISSIONS.READ_SMS,
     enabled: false,
   },
   {
-    id: "3",
-    name: "Camera Access",
-    icon: "camera.fill",
-    color: "#000",
-    enabled: true,
-  },
-  {
-    id: "4",
+    id: "mic",
     name: "Microphone",
     icon: "mic.fill",
-    color: "#000",
-    enabled: true,
+    permission: PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+    enabled: false,
   },
 ];
 
 export default function ConfigScreen() {
   const { toggleSidebar } = useContext(SidebarContext);
-  const [integrations, setIntegrations] = useState(INTEGRATIONS);
-  const [permissions, setPermissions] = useState(PERMISSIONS);
+  const [integrations, setIntegrations] = useState(INTEGRATIONS_BASE);
+  const [permissions, setPermissions] = useState(PERMISSIONS_BASE);
+  const [user, setUser] = useState<User | null>(null);
 
-  const toggleIntegration = (id: string) => {
-    setIntegrations(
-      integrations.map((item) =>
-        item.id === id ? { ...item, connected: !item.connected } : item
-      )
+  useEffect(() => {
+    // 1. Auth Listener
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      updateIntegrations(currentUser);
+    });
+
+    // 2. Check Permissions
+    checkPermissions();
+
+    return () => unsubscribe();
+  }, []);
+
+  const updateIntegrations = (currentUser: User | null) => {
+    if (!currentUser) return;
+
+    setIntegrations((prev) =>
+      prev.map((item) => {
+        if (item.name === "Google") {
+          const isGoogle = currentUser.providerData.some(
+            (p) => p.providerId === "google.com"
+          );
+          return {
+            ...item,
+            connected: isGoogle,
+            desc: isGoogle ? currentUser.email || "Connected" : "Not Connected",
+          };
+        }
+        return item; // GitHub/Slack logic to be added
+      })
     );
   };
 
-  const togglePermission = (id: string) => {
-    setPermissions(
-      permissions.map((item) =>
-        item.id === id ? { ...item, enabled: !item.enabled } : item
-      )
+  const checkPermissions = async () => {
+    if (Platform.OS !== "android") return;
+
+    const newPermissions = await Promise.all(
+      permissions.map(async (p) => {
+        const granted = await PermissionsAndroid.check(p.permission);
+        return { ...p, enabled: granted };
+      })
     );
+    setPermissions(newPermissions);
+  };
+
+  const togglePermission = async (id: string) => {
+    if (Platform.OS !== "android") {
+      Linking.openSettings();
+      return;
+    }
+
+    const perm = permissions.find((p) => p.id === id);
+
+    if (perm?.enabled) {
+      Alert.alert(
+        "Permission Granted",
+        "This permission is managed by your system settings. Go to Settings to disable it?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings() },
+        ]
+      );
+    } else {
+      // Request Permission directly or Open Settings if blocked
+      try {
+        if (perm) {
+          const granted = await PermissionsAndroid.request(perm.permission);
+          if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+            checkPermissions();
+          } else if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+            Alert.alert(
+              "Permission Denied",
+              "You previously denied this permission. Please enable it in Settings.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Open Settings",
+                  onPress: () => Linking.openSettings(),
+                },
+              ]
+            );
+          }
+        }
+      } catch (err) {
+        console.warn(err);
+        Linking.openSettings();
+      }
+    }
   };
 
   return (
@@ -114,7 +181,10 @@ export default function ConfigScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.menuButton}>
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={() => Linking.openSettings()}
+            >
               <Ionicons name="settings-outline" size={22} color="#2D3436" />
             </TouchableOpacity>
           </View>
@@ -136,12 +206,28 @@ export default function ConfigScreen() {
           style={styles.profileSection}
         >
           <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>RC</Text>
-            </View>
-            <View style={styles.onlineBadge} />
+            {user?.photoURL ? (
+              <Image source={{ uri: user.photoURL }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: "#636E72" }]}>
+                <Text style={styles.avatarText}>
+                  {user?.displayName?.charAt(0) || "U"}
+                </Text>
+              </View>
+            )}
+            <View
+              style={[
+                styles.onlineBadge,
+                { backgroundColor: user ? "#00B894" : "#B2BEC3" },
+              ]}
+            />
           </View>
-          <Text style={styles.profileName}>Rishik C. Karuturi</Text>
+          <Text style={styles.profileName}>
+            {user?.displayName || "Guest User"}
+          </Text>
+          <Text style={styles.profileEmail}>
+            {user?.email || "Not signed in"}
+          </Text>
 
           <TouchableOpacity style={styles.editProfileBtn}>
             <Text style={styles.editProfileText}>Edit Profile</Text>
@@ -188,7 +274,7 @@ export default function ConfigScreen() {
                       ? styles.connectedBtn
                       : styles.disconnectedBtn,
                   ]}
-                  onPress={() => toggleIntegration(item.id)}
+                  disabled={true}
                 >
                   <Text
                     style={[
@@ -211,7 +297,7 @@ export default function ConfigScreen() {
           entering={FadeInUp.delay(400)}
           style={styles.sectionContainer}
         >
-          <Text style={styles.sectionHeader}>Permissions</Text>
+          <Text style={styles.sectionHeader}>System Permissions</Text>
           <View style={styles.settingsGroup}>
             {permissions.map((item, index) => (
               <View

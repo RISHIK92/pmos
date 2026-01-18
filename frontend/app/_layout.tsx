@@ -8,21 +8,33 @@ export const unstable_settings = {
   initialRouteName: "index",
 };
 
+import { startPMOSService } from "../services/BackgroundService";
 import ShareRequestHandler from "../components/ShareRequestHandler";
-
 import { useEffect } from "react";
 import { PermissionsAndroid, Platform } from "react-native";
-import { auth } from "../lib/firebase";
-import { preFilterSms } from "../utils/smsParser";
-
-// @ts-ignore
-import SmsListener from "react-native-android-sms-listener";
 
 export default function RootLayout() {
   useEffect(() => {
-    const requestSmsPermission = async () => {
+    const requestPermissions = async () => {
       if (Platform.OS !== "android") return;
 
+      // 1. Notification Permission (Android 13+)
+      if (Platform.Version >= 33) {
+        try {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+          );
+          if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+            console.log("🔔 Notification Permission Granted");
+          } else {
+            console.log("🔕 Notification Permission Denied");
+          }
+        } catch (err) {
+          console.warn(err);
+        }
+      }
+
+      // 2. SMS Permission
       try {
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.READ_SMS,
@@ -37,7 +49,7 @@ export default function RootLayout() {
         );
         if (granted === PermissionsAndroid.RESULTS.GRANTED) {
           console.log("SMS Permission Granted");
-          startSmsListener();
+          startPMOSService();
         } else {
           console.log("SMS Permission Denied");
         }
@@ -46,58 +58,7 @@ export default function RootLayout() {
       }
     };
 
-    const startSmsListener = () => {
-      const subscription = SmsListener.addListener(async (message: any) => {
-        console.log("SMS Received:", message);
-
-        // Quick pre-filter check
-        if (!preFilterSms(message.body)) {
-          console.log("SMS pre-filter: Not a transaction");
-          return;
-        }
-
-        console.log("SMS pre-filter passed, sending to backend...");
-
-        try {
-          const user = auth.currentUser;
-          if (!user) {
-            console.log("No authenticated user, skipping SMS parsing");
-            return;
-          }
-          const token = await user.getIdToken();
-
-          // Config - ideally from env
-          const backendUrl = "http://10.141.28.129:8000";
-
-          // Send raw SMS to backend for Gemini parsing
-          const response = await fetch(`${backendUrl}/finance/parse-sms`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              body: message.body,
-              sender: message.originatingAddress,
-            }),
-          });
-
-          const result = await response.json();
-
-          if (result.success) {
-            console.log("✅ SMS Transaction Saved:", result.message);
-          } else {
-            console.log("ℹ️ SMS not a transaction:", result.message);
-          }
-        } catch (error) {
-          console.log("Failed to parse SMS transaction", error);
-        }
-      });
-
-      return () => subscription.remove();
-    };
-
-    requestSmsPermission();
+    requestPermissions();
   }, []);
 
   return (

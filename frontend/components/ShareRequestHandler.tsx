@@ -10,17 +10,45 @@ import {
   StyleSheet,
   BackHandler,
 } from "react-native";
-import { auth } from "../lib/firebase";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "expo-router";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import Animated, { FadeIn, ZoomIn } from "react-native-reanimated";
 
 export default function ShareRequestHandler() {
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [modalVisible, setModalVisible] = useState(false);
   const router = useRouter();
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [status, setStatus] = useState<"success" | "error">("success");
+  // Helper to wait for auth restoration
+  const waitForAuthToken = (): Promise<string | null> => {
+    return new Promise((resolve) => {
+      // Check if already loaded
+      if (auth.currentUser) {
+        auth.currentUser
+          .getIdToken()
+          .then(resolve)
+          .catch(() => resolve(null));
+        return;
+      }
+
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        unsubscribe();
+        if (user) {
+          try {
+            const token = await user.getIdToken();
+            resolve(token);
+          } catch {
+            resolve(null);
+          }
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  };
 
   const backendUrl =
     Platform.OS === "android"
@@ -32,19 +60,21 @@ export default function ShareRequestHandler() {
       if (hasShareIntent && shareIntent) {
         console.log("📲 Application opened via Share Menu!", shareIntent);
 
+        // Wait for auth to initialize
+        const token = await waitForAuthToken();
+
         if (shareIntent.type === "text" || shareIntent.type === "weburl") {
           const content = shareIntent.webUrl || shareIntent.text || "";
           const isUrl =
             content.startsWith("http://") || content.startsWith("https://");
 
           try {
-            const user = auth.currentUser;
-            if (!user) {
+            if (!token) {
+              console.log("No auth token available for share handler");
               setStatus("error");
               setModalVisible(true);
               return;
             }
-            const token = await user.getIdToken();
 
             // Helper to extract platform from URL
             const getPlatformFromUrl = (

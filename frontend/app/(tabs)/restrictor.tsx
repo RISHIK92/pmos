@@ -21,9 +21,10 @@ import { auth } from "../../lib/firebase";
 import Animated, {
   FadeInDown,
   FadeInUp,
-  Layout,
   withSpring,
 } from "react-native-reanimated";
+
+import { lockSession, unlockSession } from "../../services/BlockerService";
 
 const { width } = Dimensions.get("window");
 
@@ -182,6 +183,10 @@ export default function RestrictorScreen() {
       );
       return;
     }
+
+    // 1. Lock User
+    lockSession();
+
     setTimeLeft(minutes * 60);
     setIsFocusActive(true);
     setShowExitSurvey(false);
@@ -190,6 +195,9 @@ export default function RestrictorScreen() {
   };
 
   const endSession = async (completed: boolean, reason?: string) => {
+    // 2. Unlock User
+    unlockSession();
+
     setIsFocusActive(false);
     setShowExitSurvey(false);
     if (timerRef.current) clearInterval(timerRef.current);
@@ -403,7 +411,7 @@ export default function RestrictorScreen() {
           </Animated.View>
 
           {/* App List - Clean */}
-          <View style={styles.sectionContainer}>
+          {/* <View style={styles.sectionContainer}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionHeader}>Blocked Apps</Text>
               <View style={styles.countBadge}>
@@ -450,7 +458,7 @@ export default function RestrictorScreen() {
                 </Animated.View>
               ))}
             </View>
-          </View>
+          </View> */}
         </ScrollView>
       </KeyboardAvoidingView>
 
