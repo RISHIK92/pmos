@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import AppLauncher from "../utils/AppLauncher";
+import ContactManager from "../utils/ContactManager";
+import AlarmManager from "../utils/AlarmManager";
 import {
   View,
   Text,
@@ -21,20 +23,23 @@ import Animated, {
   useAnimatedStyle,
   Easing,
   withSequence,
+  withRepeat,
 } from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { WaveformIcon } from "./ui/WaveformIcon";
 import { Audio } from "expo-av";
+//@ts-ignore
+import RNImmediatePhoneCall from "react-native-immediate-phone-call";
 
 const { width } = Dimensions.get("window");
 
 // --- Noise Gate Thresholds ---
 const MIN_DURATION = 1200; // 1.2 second minimum
-const MIN_VOLUME = -35; // dB threshold (below this is background noise)
+const MIN_VOLUME = -20; // dB threshold (below this is background noise)
 const INITIAL_SILENCE_TIMEOUT = 4000; // 4 seconds before user speaks
-const SPEECH_SILENCE_TIMEOUT = 2000; // 2 seconds after user started speaking
+const SPEECH_SILENCE_TIMEOUT = 1500; // 1.5 seconds after user started speaking
 
 export default function AssistantOverlay() {
   const [visible, setVisible] = useState(true);
@@ -59,8 +64,9 @@ export default function AssistantOverlay() {
 
   // Auto-start recording on mount
   useEffect(() => {
-    // Preload apps
+    // Preload apps and contacts
     AppLauncher.preloadApps();
+    ContactManager.preloadContacts();
 
     if (!hasAutoStartedRef.current) {
       hasAutoStartedRef.current = true;
@@ -133,37 +139,107 @@ export default function AssistantOverlay() {
     }
   };
 
-  const handleTextSubmit = async () => {
-    const result = inputText.trim();
-    if (result) {
-      console.log("📝 Transcribed:", result);
+  // Central handling for Voice & Text results
+  const handleUserIntent = async (text: string) => {
+    const cleanText = text.trim();
+    if (!cleanText) return;
 
-      // 🚀 Smart Prefilter: Check for App Launch command
-      const launchMatch = result.trim().match(/^(?:open|launch)\s+(.+)/i);
+    console.log("Processing Intent:", cleanText);
 
-      if (launchMatch) {
-        const appName = launchMatch[1];
-        console.log(`🚀 Attempting to launch app: ${appName}`);
+    const digitOnly = cleanText.replace(/[^0-9]/g, "");
 
-        setInputText("");
-        setLastUserQuery(result);
-        setIsProcessingText(true);
+    const isNumberFormat = /^[\d\s\-\(\)\+]+$/.test(cleanText);
 
-        const launched = await AppLauncher.findAndOpen(appName);
+    if (digitOnly.length === 10 && isNumberFormat) {
+      console.log("📞 Direct number detected:", digitOnly);
+      setLastUserQuery(cleanText);
+      setResponse(`Calling ${digitOnly}...`);
+      // Linking.openURL(`tel:${digitOnly}`);
+      RNImmediatePhoneCall.immediatePhoneCall(digitOnly);
+      setTimeout(() => handleDismiss(), 2000);
+      return;
+    }
+
+    // 2. Alarm Check
+    if (cleanText.toLowerCase().includes("alarm")) {
+      console.log("⏰ Alarm command detected");
+      setLastUserQuery(cleanText);
+      setIsProcessingText(true);
+
+      const { success, message, time } = await AlarmManager.parseAndSet(
+        cleanText
+      );
+      setResponse(message);
+      setIsProcessingText(false);
+
+      if (success) {
+        setTimeout(() => handleDismiss(), 2000);
+      }
+      return;
+    }
+
+    // 3. Regex Check (Open/Launch/Call/Phone)
+    const match = cleanText.match(/^(open|launch|call|phone)\s+(.+)/i);
+
+    if (match) {
+      const command = match[1].toLowerCase();
+      const targetName = match[2].trim();
+      console.log(`🚀 Command: ${command}, Target: ${targetName}`);
+
+      setLastUserQuery(cleanText);
+      setIsProcessingText(true);
+
+      if (command === "call" || command === "phone") {
+        // Check if target is a number first
+        const targetDigits = targetName.replace(/[^0-9]/g, "");
+        if (
+          targetDigits.length === 10 &&
+          /^[\d\s\-\(\)\+]+$/.test(targetName)
+        ) {
+          setIsProcessingText(false);
+          setResponse(`Calling ${targetDigits}...`);
+          // Linking.openURL(`tel:${targetDigits}`);
+          RNImmediatePhoneCall.immediatePhoneCall(targetDigits);
+          setTimeout(() => handleDismiss(), 2000);
+          return;
+        }
+
+        const { success, message } = await ContactManager.findAndCall(
+          targetName
+        );
+        setResponse(message);
+        setIsProcessingText(false);
+
+        if (success) {
+          setTimeout(() => handleDismiss(), 2000);
+        }
+        return;
+      } else {
+        // App Launch
+        const launched = await AppLauncher.findAndOpen(targetName);
 
         if (launched) {
           setIsProcessingText(false);
-          setResponse(`Opening ${appName}...`);
+          setResponse(`Opening ${targetName}...`);
           setTimeout(() => handleDismiss(), 2000);
           return;
         } else {
           console.log("⚠️ App not found, blocking fallback");
           setIsProcessingText(false);
-          setResponse(`App "${appName}" not found locally.`);
+          setResponse(`App "${targetName}" not found locally.`);
           return;
         }
       }
-      processQuery(inputText);
+    }
+
+    // 3. AI Fallback
+    processQuery(cleanText);
+  };
+
+  const handleTextSubmit = async () => {
+    if (inputText.trim()) {
+      setInputText("");
+      handleUserIntent(inputText);
     }
   };
 
@@ -296,36 +372,7 @@ export default function AssistantOverlay() {
 
           if (result) {
             console.log("📝 Transcribed:", result);
-
-            // 🚀 Smart Prefilter: Check for App Launch command
-            const launchMatch = result.trim().match(/^(?:open|launch)\s+(.+)/i);
-
-            if (launchMatch) {
-              const appName = launchMatch[1];
-              console.log(`🚀 Attempting to launch app: ${appName}`);
-
-              // Set UI immediately to show what we heard
-              setLastUserQuery(result);
-              setIsProcessingText(true); // Show thinking state
-
-              const launched = await AppLauncher.findAndOpen(appName);
-
-              if (launched) {
-                setIsProcessingText(false);
-                setResponse(`Opening ${appName}...`);
-                // Close overlay after short delay
-                setTimeout(() => handleDismiss(), 2000);
-                return;
-              } else {
-                console.log("⚠️ App not found, blocking fallback");
-                setIsProcessingText(false);
-                setResponse(`App "${appName}" not found locally.`);
-                return;
-              }
-            }
-
-            // Fallback: Auto-Send Transcribed Text to AI unless it was a failed launch command
-            processQuery(result);
+            handleUserIntent(result);
           }
         } catch (error) {
           console.error("Failed to process voice", error);
