@@ -53,13 +53,16 @@ class ContactManager {
   }
 
   /**
-   * Attempts to find and call a contact matching the query.
-   * @param query The name of the person to call (e.g., "mom", "john doe")
-   * @returns object with success status and message/name
+   * Finds a contact matching the query and returns their details.
    */
-  public async findAndCall(
+  public async findContact(
     query: string
-  ): Promise<{ success: boolean; message: string; name?: string }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    name?: string;
+    phone?: string;
+  }> {
     if (this.contacts.length === 0) {
       await this.preloadContacts();
     }
@@ -90,24 +93,42 @@ class ContactManager {
 
     if (match && match.phoneNumbers && match.phoneNumbers.length > 0) {
       const number = match.phoneNumbers[0].number;
-      // Sanitize number for tel: link
+      // Sanitize number
       const safeNumber = number?.replace(/[\s\-\(\)]/g, "") || "";
+      return {
+        success: true,
+        message: "Contact found.",
+        name: match.name,
+        phone: safeNumber,
+      };
+    }
 
-      console.log(`[ContactManager] Calling ${match.name} at ${safeNumber}`);
+    return { success: false, message: `Contact "${query}" not found.` };
+  }
 
-      if (safeNumber) {
-        // Linking.openURL(`tel:${safeNumber}`);
-        RNImmediatePhoneCall.immediatePhoneCall(safeNumber);
-        return {
-          success: true,
-          message: `Calling ${match.name}...`,
-          name: match.name,
-        };
-      }
+  /**
+   * Attempts to find and call a contact matching the query.
+   * @param query The name of the person to call (e.g., "mom", "john doe")
+   * @returns object with success status and message/name
+   */
+  public async findAndCall(
+    query: string
+  ): Promise<{ success: boolean; message: string; name?: string }> {
+    const { success, message, name, phone } = await this.findContact(query);
+
+    if (success && phone) {
+      console.log(`[ContactManager] Calling ${name} at ${phone}`);
+      // Linking.openURL(`tel:${phone}`);
+      RNImmediatePhoneCall.immediatePhoneCall(phone);
+      return {
+        success: true,
+        message: `Calling ${name}...`,
+        name: name,
+      };
     }
 
     console.log(`[ContactManager] Contact not found for: ${query}`);
-    return { success: false, message: `Contact "${query}" not found.` };
+    return { success: false, message: message };
   }
 }
 

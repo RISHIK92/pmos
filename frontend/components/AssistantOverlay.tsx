@@ -2,6 +2,9 @@ import React, { useEffect, useState, useRef } from "react";
 import AppLauncher from "../utils/AppLauncher";
 import ContactManager from "../utils/ContactManager";
 import AlarmManager from "../utils/AlarmManager";
+import SystemManager from "../utils/SystemManager";
+import MediaManager from "../utils/MediaManager";
+import WhatsAppManager from "../utils/WhatsAppManager";
 import {
   View,
   Text,
@@ -30,6 +33,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { WaveformIcon } from "./ui/WaveformIcon";
 import { Audio } from "expo-av";
+import { CameraView } from "expo-camera";
 //@ts-ignore
 import RNImmediatePhoneCall from "react-native-immediate-phone-call";
 
@@ -49,6 +53,7 @@ export default function AssistantOverlay() {
   const [isProcessingText, setIsProcessingText] = useState(false);
   const [response, setResponse] = useState<string | null>(null);
   const [lastUserQuery, setLastUserQuery] = useState<string | null>(null);
+  const [isTorchOn, setIsTorchOn] = useState(false);
   const router = useRouter();
   const pulseScale = useSharedValue(1);
 
@@ -139,6 +144,55 @@ export default function AssistantOverlay() {
     }
   };
 
+  const handleMediaAction = async (text: string) => {
+    const lower = text.toLowerCase();
+    // 1. Play [Song]
+    if (lower.startsWith("play")) {
+      const songName = text.substring(4).trim();
+      if (songName) {
+        return MediaManager.playSong(songName);
+      }
+      // If just "play" -> resume
+      return MediaManager.control("play_pause");
+    }
+
+    // 2. Controls
+    if (lower.includes("pause") || lower.includes("stop music"))
+      return MediaManager.control("pause");
+    if (lower.includes("next") || lower.includes("skip"))
+      return MediaManager.control("next");
+    if (lower.includes("prev") || lower.includes("back"))
+      return MediaManager.control("previous");
+
+    return { success: false, message: "Unknown media command." };
+  };
+
+  const handleSystemAction = async (text: string) => {
+    // Local Flashlight Handling (needs state access)
+    if (
+      text.toLowerCase().includes("flash") ||
+      text.toLowerCase().includes("lumos") ||
+      text.toLowerCase().includes("nox")
+    ) {
+      const turnOn =
+        text.toLowerCase().includes("on") ||
+        text.toLowerCase().includes("lumos");
+      const turnOff =
+        text.toLowerCase().includes("off") ||
+        text.toLowerCase().includes("nox");
+
+      if (turnOn) {
+        setIsTorchOn(true);
+        return { success: true, message: "Turning on flashlight..." };
+      }
+      if (turnOff) {
+        setIsTorchOn(false);
+        return { success: true, message: "Turning off flashlight..." };
+      }
+    }
+    return SystemManager.handleAction(text);
+  };
+
   // Central handling for Voice & Text results
   const handleUserIntent = async (text: string) => {
     const cleanText = text.trim();
@@ -178,7 +232,79 @@ export default function AssistantOverlay() {
       return;
     }
 
-    // 3. Regex Check (Open/Launch/Call/Phone)
+    // 3. Timer Check
+    if (cleanText.toLowerCase().includes("timer")) {
+      console.log("⏳ Timer command detected");
+      setLastUserQuery(cleanText);
+      setIsProcessingText(true);
+
+      const { success, message } = await AlarmManager.parseAndSetTimer(
+        cleanText
+      );
+      setResponse(message);
+      setIsProcessingText(false);
+
+      if (success) {
+        setTimeout(() => handleDismiss(), 2000);
+      }
+      return;
+    }
+
+    // 4. Media Controls (Play, Pause, Next, Prev)
+    if (
+      cleanText.toLowerCase().match(/^(play|pause|stop|next|skip|prev|back)/i)
+    ) {
+      const mediaResult = await handleMediaAction(cleanText);
+      if (mediaResult.success) {
+        console.log("🎵 Media command detected");
+        setLastUserQuery(cleanText);
+        setResponse(mediaResult.message);
+        setTimeout(() => handleDismiss(), 2000);
+        return;
+      }
+    }
+
+    // 5. WhatsApp Integration (Auto-Send)
+    // Matches: "Send whatsapp to mom hello world"
+    if (cleanText.toLowerCase().includes("whatsapp")) {
+      const match = cleanText.match(/send whatsapp to (.+?) (.+)/i);
+      if (match) {
+        const contactName = match[1].trim();
+        const messageBody = match[2].trim();
+
+        setLastUserQuery(cleanText);
+        setResponse(`Sending to ${contactName}...`);
+
+        // Resolve contact to phone number
+        const { success, message, phone } = await ContactManager.findContact(
+          contactName
+        ); // We likely need to expose a findContact that returns phone
+
+        if (success && phone) {
+          WhatsAppManager.send(phone, messageBody);
+          setTimeout(() => handleDismiss(), 2000);
+        } else {
+          setResponse("Contact not found.");
+        }
+        return;
+      }
+    }
+
+    // 6. System Controls (Flashlight, Brightness, Settings)
+    const sysResult = await handleSystemAction(cleanText);
+    if (sysResult.success || sysResult.message !== "Unknown system command.") {
+      if (sysResult.message !== "Unknown system command.") {
+        console.log("⚙️ System command detected");
+        setLastUserQuery(cleanText);
+        setResponse(sysResult.message);
+        // Don't auto-dismiss for toggle actions immediately so user sees feedback,
+        // but for simple toggles we can.
+        setTimeout(() => handleDismiss(), 2000);
+        return;
+      }
+    }
+
+    // 5. Regex Check (Open/Launch/Call/Phone)
     const match = cleanText.match(/^(open|launch|call|phone)\s+(.+)/i);
 
     if (match) {
@@ -451,6 +577,13 @@ export default function AssistantOverlay() {
           />
         </View>
       </Animated.View>
+
+      {Platform.OS === "android" && (
+        <CameraView
+          style={{ width: 1, height: 1, position: "absolute", top: -100 }}
+          enableTorch={isTorchOn}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }

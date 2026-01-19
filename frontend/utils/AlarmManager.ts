@@ -89,6 +89,83 @@ class AlarmManager {
       },
     });
   }
+  /**
+   * Parses text command to extract duration and set a timer.
+   * Supported patterns:
+   * "set timer for 10 minutes"
+   * "set timer for 1 hour 30 minutes"
+   */
+  async parseAndSetTimer(
+    text: string
+  ): Promise<{ success: boolean; message: string }> {
+    if (Platform.OS !== "android") {
+      return {
+        success: false,
+        message: "Timer setting is only supported on Android.",
+      };
+    }
+
+    const lowerText = text.toLowerCase();
+
+    // Regex for: "set timer for [X] hours [Y] minutes"
+    // Supports: hours, hrs, hr, h
+    // Supports: minutes, mins, min, mn, m
+    const timerRegex =
+      /set\s+timer\s+for\s+(?:(\d+)\s*(?:hours?|hrs?|hr|h))?\s*(?:(\d+)\s*(?:minutes?|mins?|min|mn|m))?/i;
+    const match = lowerText.match(timerRegex);
+
+    if (!match) {
+      return { success: false, message: "Could not understand the duration." };
+    }
+
+    const hoursStr = match[1];
+    const minutesStr = match[2];
+
+    if (!hoursStr && !minutesStr) {
+      return { success: false, message: "Please specify a duration." };
+    }
+
+    const hours = hoursStr ? parseInt(hoursStr, 10) : 0;
+    const minutes = minutesStr ? parseInt(minutesStr, 10) : 0;
+
+    const totalSeconds = hours * 3600 + minutes * 60;
+
+    if (totalSeconds <= 0) {
+      return { success: false, message: "Duration must be greater than zero." };
+    }
+
+    let timeMessage = "";
+    if (hours > 0) timeMessage += `${hours} hour${hours > 1 ? "s" : ""} `;
+    if (minutes > 0)
+      timeMessage += `${minutes} minute${minutes > 1 ? "s" : ""}`;
+
+    try {
+      await this.setTimer(totalSeconds);
+      return {
+        success: true,
+        message: `Setting timer for ${timeMessage.trim()}...`,
+      };
+    } catch (e) {
+      console.error("[AlarmManager] Error setting timer", e);
+      return { success: false, message: "Failed to open clock app." };
+    }
+  }
+
+  /**
+   * Fires the native Android Intent to set a timer.
+   */
+  async setTimer(seconds: number) {
+    if (Platform.OS !== "android") return;
+
+    // android.intent.action.SET_TIMER
+    await IntentLauncher.startActivityAsync("android.intent.action.SET_TIMER", {
+      extra: {
+        "android.intent.extra.alarm.LENGTH": seconds,
+        "android.intent.extra.alarm.SKIP_UI": true,
+        "android.intent.extra.alarm.MESSAGE": "Set by PMOS",
+      },
+    });
+  }
 }
 
 export default new AlarmManager();
