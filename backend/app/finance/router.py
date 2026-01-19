@@ -93,7 +93,7 @@ async def parse_sms(request: ParseSmsRequest, user_data: dict = Depends(verify_t
             message=f"No matching account found. SMS accounts: {found_acc_numbers}, User accounts: {list(user_account_numbers)}"
         )
     
-    parsed = await parse_sms_with_gemini(request.body, request.sender, account_list)
+    parsed = await parse_sms_with_gemini(request.body, account_list)
     
     if not parsed:
         return ParseSmsResponse(success=False, transaction=None, message="Not a valid transaction SMS")

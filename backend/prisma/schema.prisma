@@ -80,6 +80,11 @@ model Memory {
   content   String
   tags      String[]
 
+  isCritical    Boolean  @default(false)
+  reminderTime  String?  // "HH:MM"
+  repeatPattern String?  // "daily", "weekly", "monthly", "none"
+  reminderDate  String?  // "YYYY-MM-DD"
+
   @@index([userId])
 }
 

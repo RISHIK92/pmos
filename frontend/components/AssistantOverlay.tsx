@@ -5,6 +5,7 @@ import AlarmManager from "../utils/AlarmManager";
 import SystemManager from "../utils/SystemManager";
 import MediaManager from "../utils/MediaManager";
 import WhatsAppManager from "../utils/WhatsAppManager";
+import SmsManager from "../utils/SmsManager";
 import {
   View,
   Text,
@@ -285,6 +286,46 @@ export default function AssistantOverlay() {
           setTimeout(() => handleDismiss(), 2000);
         } else {
           setResponse("Contact not found.");
+        }
+        return;
+      }
+    }
+
+    // 5.5. SMS Integration (Background Send)
+    // Matches: "Send sms to mom hello world" or "text mom hello world"
+    if (
+      cleanText.toLowerCase().includes("sms") ||
+      cleanText.toLowerCase().startsWith("text")
+    ) {
+      const smsMatch = cleanText.match(/(?:send sms to|text) (.+?) (.+)/i);
+      if (smsMatch) {
+        const contactName = smsMatch[1].trim();
+        const messageBody = smsMatch[2].trim();
+
+        setLastUserQuery(cleanText);
+        setResponse(`Sending SMS to ${contactName}...`);
+        setIsProcessingText(true);
+
+        try {
+          // Resolve contact to phone number
+          const { success, message, phone } = await ContactManager.findContact(
+            contactName
+          );
+
+          if (success && phone) {
+            // Send SMS using the native module
+            const result = await SmsManager.send(phone, messageBody);
+            setIsProcessingText(false);
+            setResponse(`SMS sent to ${contactName}!`);
+            setTimeout(() => handleDismiss(), 2000);
+          } else {
+            setIsProcessingText(false);
+            setResponse("Contact not found.");
+          }
+        } catch (error: any) {
+          setIsProcessingText(false);
+          console.error("SMS Error:", error);
+          setResponse(error.message || "Failed to send SMS. Please try again.");
         }
         return;
       }

@@ -12,8 +12,6 @@ You are a financial SMS parser. Extract transaction details from the following b
 SMS Content:
 "{sms_body}"
 
-Sender: {sender}
-
 User's registered account numbers (last 4 digits): {account_numbers}
 
 INSTRUCTIONS:
@@ -36,13 +34,13 @@ RULES:
 - "credited", "received", "refund" → type: "credit"
 - amount must be a number (no currency symbols)
 - account_last_4 must be exactly 4 digits from the SMS
+- merchant must be the name of the person amount recieved or sent to
 - category options: Food, Shopping, Transport, Bills, Entertainment, Health, Transfer, Salary, Other
 - Return ONLY valid JSON, no markdown blocks, no explanations, no extra text
 """
 
 async def parse_sms_with_gemini(
     sms_body: str,
-    sender: str,
     user_accounts: list
 ) -> Optional[dict]:
     
@@ -57,7 +55,6 @@ async def parse_sms_with_gemini(
         
         prompt = PARSE_SMS_PROMPT.format(
             sms_body=sms_body,
-            sender=sender,
             account_numbers=account_numbers_str
         )
         

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from common.security import verify_token
 from app.memory.controller import MemoryController
-from app.memory.schema import MemoryCreate, MemoryResponse
+from app.memory.schema import MemoryCreate, MemoryResponse, MemoryUpdate
 from typing import List
 
 router = APIRouter(prefix="/memory")
@@ -14,6 +14,13 @@ async def get_memories(user_data: dict = Depends(verify_token)):
 @router.post("/", response_model=MemoryResponse)
 async def create_memory(memory: MemoryCreate, user_data: dict = Depends(verify_token)):
     return await controller.create(memory, user_data)
+
+@router.put("/{memory_id}", response_model=MemoryResponse)
+async def update_memory(memory_id: str, memory: MemoryUpdate, user_data: dict = Depends(verify_token)):
+    result = await controller.update(memory_id, memory, user_data)
+    if not result:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    return result
 
 @router.delete("/{memory_id}")
 async def delete_memory(memory_id: str, user_data: dict = Depends(verify_token)):

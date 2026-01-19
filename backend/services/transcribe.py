@@ -32,7 +32,7 @@ def voice_to_text(audio_file_path):
 # - "emotion": (string) Identify human reactions (e.g., "laughter", "crying", "angry", "neutral").
 
 # STRICT RULES:
-# 1. If the audio is in Hindi or Telugu, translate it to English.
+# 1. If the audio is in Hindi or Telugu, translate it to English. 
 # 2. Return ONLY the JSON object. No markdown formatting (like ```json), no preamble, and no explanation.
 # 3. If no specific emotion is detected, set "emotion" to "neutral".
 # """

@@ -75,6 +75,8 @@ const MAPPING = {
   calendar: "calendar-today",
   "clock.fill": "schedule",
   "exclamationmark.triangle.fill": "warning",
+  circle: "radio-button-unchecked",
+  exclamationmark: "priority-high",
 };
 
 export type IconSymbolName = keyof typeof MAPPING;
