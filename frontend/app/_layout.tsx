@@ -10,10 +10,48 @@ export const unstable_settings = {
 
 import { startPMOSService } from "../services/BackgroundService";
 import ShareRequestHandler from "../components/ShareRequestHandler";
-import { useEffect } from "react";
-import { PermissionsAndroid, Platform } from "react-native";
+import { useEffect, useState } from "react";
+import { PermissionsAndroid, Platform, AppState } from "react-native";
+import { AlarmManager, AlarmLaunchDetails } from "@/utils/AlarmManager";
+import { AlarmRingView } from "@/components/AlarmRingView";
 
 export default function RootLayout() {
+  const [alarmDetails, setAlarmDetails] = useState<AlarmLaunchDetails | null>(
+    null,
+  );
+
+  useEffect(() => {
+    // Check if app was launched by alarm
+    const checkAlarm = async () => {
+      console.log("RootLayout: Checking for alarm launch details...");
+      const details = await AlarmManager.getLaunchDetails();
+      if (details?.isCriticalAlarm) {
+        console.log("RootLayout: CRITICAL ALARM DETECTED!", details);
+        setAlarmDetails(details);
+      } else {
+        console.log("RootLayout: No critical alarm details found.");
+      }
+    };
+
+    checkAlarm();
+
+    // Also listen for app state changes in case it comes to foreground
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        checkAlarm();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const handleDismissAlarm = () => {
+    setAlarmDetails(null);
+    AlarmManager.stopAlarm();
+  };
+
   useEffect(() => {
     const requestPermissions = async () => {
       if (Platform.OS !== "android") return;
@@ -22,7 +60,7 @@ export default function RootLayout() {
       if (Platform.Version >= 33) {
         try {
           const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
           );
           if (granted === PermissionsAndroid.RESULTS.GRANTED) {
             console.log("🔔 Notification Permission Granted");
@@ -45,7 +83,7 @@ export default function RootLayout() {
             buttonNeutral: "Ask Me Later",
             buttonNegative: "Cancel",
             buttonPositive: "OK",
-          }
+          },
         );
         if (granted === PermissionsAndroid.RESULTS.GRANTED) {
           console.log("SMS Permission Granted");
@@ -87,6 +125,12 @@ export default function RootLayout() {
       </Stack>
 
       <StatusBar backgroundColor="transparent" />
+      {alarmDetails && (
+        <AlarmRingView
+          title={alarmDetails.title}
+          onDismiss={handleDismissAlarm}
+        />
+      )}
     </View>
   );
 }

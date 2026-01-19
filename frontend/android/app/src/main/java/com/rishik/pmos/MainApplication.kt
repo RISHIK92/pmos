@@ -27,7 +27,9 @@ class MainApplication : Application(), ReactApplication {
               add(PMOSBlockerPackage())
               add(MediaControlPackage())
               add(WhatsAppPackage())
+              add(WhatsAppPackage())
               add(SmsPackage())
+              add(AlarmPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"

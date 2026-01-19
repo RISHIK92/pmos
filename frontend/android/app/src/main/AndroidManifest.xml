@@ -18,6 +18,9 @@
   <uses-permission android:name="android.permission.SEND_SMS" />
   <uses-permission android:name="com.android.alarm.permission.SET_ALARM"/>
   <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+  <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
@@ -42,6 +45,8 @@
             <action android:name="android.provider.Telephony.SMS_RECEIVED" />
         </intent-filter>
     </receiver>
+    
+    <receiver android:name=".AlarmReceiver" android:exported="true" />
 
     <service android:name=".SmsHeadlessTaskService" />
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/AppTheme" android:exported="true" android:screenOrientation="portrait">

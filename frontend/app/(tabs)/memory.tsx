@@ -15,6 +15,7 @@ import {
   Alert,
   ScrollView,
 } from "react-native";
+import { AlarmManager } from "@/utils/AlarmManager";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SidebarContext } from "./_layout";
@@ -205,6 +206,24 @@ export default function MemoryScreen() {
       }
 
       if (res.ok) {
+        // Schedule alarm if critical and reminder set
+        if (isCritical && reminderDate && reminderTime) {
+          const [year, month, day] = reminderDate.split("-").map(Number);
+          const [hours, minutes] = reminderTime.split(":").map(Number);
+          const alarmDate = new Date(year, month - 1, day, hours, minutes);
+
+          if (alarmDate.getTime() > Date.now()) {
+            AlarmManager.scheduleCriticalAlarm(newTitle, alarmDate.getTime());
+            Alert.alert(
+              "Alarm Set",
+              "Critical alarm scheduled for " +
+                reminderDate +
+                " " +
+                reminderTime,
+            );
+          }
+        }
+
         resetModal();
         fetchMemories(); // Refresh list
       } else {

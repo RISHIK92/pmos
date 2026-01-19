@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Slot, Stack } from "expo-router";
+import { Stack } from "expo-router";
 import { Sidebar } from "@/components/ui/Sidebar";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, AppState } from "react-native";
+import { AlarmManager, AlarmLaunchDetails } from "@/utils/AlarmManager";
 
 export const SidebarContext = React.createContext({
   toggleSidebar: () => {},
