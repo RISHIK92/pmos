@@ -30,6 +30,8 @@ model User {
     TaskSection TaskSection[]
     dailyLogs DailyLog[]
 
+    dailyHealthLogs DailyHealthLog[]
+
     bankAccounts BankAccount[]
 }
 
@@ -240,4 +242,20 @@ model MealItem {
   createdAt   DateTime @default(now())
 
   @@index([dailyLogId])
+}
+
+model DailyHealthLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  date      DateTime
+  steps     Int      @default(0)
+  hourlyData String? // JSON string: {"09:00": 500, ...}
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([userId, date])
+  @@index([userId])
 }

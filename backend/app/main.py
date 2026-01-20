@@ -14,6 +14,7 @@ from app.finance.accounts.router import router as accounts_router
 from app.content.router import router as content_router
 from app.focus.router import router as focus_router
 from app.nutrition.router import router as nutrition_router
+from app.health.router import router as health_router
 
 app = FastAPI(lifespan=lifespan)
 
@@ -26,6 +27,7 @@ app.include_router(accounts_router, tags=["accounts"])
 app.include_router(content_router)
 app.include_router(focus_router)
 app.include_router(nutrition_router)
+app.include_router(health_router, prefix="/health", tags=["health"])
 
 @app.get("/")
 def root():
