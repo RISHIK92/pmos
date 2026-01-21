@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
 import AppLauncher from "../utils/AppLauncher";
 import ContactManager from "../utils/ContactManager";
-import AlarmManager from "../utils/AlarmManager";
+import { AlarmManager } from "../utils/AlarmManager";
 import SystemManager from "../utils/SystemManager";
 import MediaManager from "../utils/MediaManager";
 import WhatsAppManager from "../utils/WhatsAppManager";
 import SmsManager from "../utils/SmsManager";
+import { SleepManager } from "../utils/SleepManager";
 import {
   View,
   Text,
@@ -99,10 +100,10 @@ export default function AssistantOverlay() {
       pulseScale.value = withRepeat(
         withSequence(
           withTiming(1.1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) })
+          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
         ),
         -1,
-        false
+        false,
       );
     } else {
       pulseScale.value = withTiming(1, { duration: 200 });
@@ -221,9 +222,8 @@ export default function AssistantOverlay() {
       setLastUserQuery(cleanText);
       setIsProcessingText(true);
 
-      const { success, message, time } = await AlarmManager.parseAndSet(
-        cleanText
-      );
+      const { success, message, time } =
+        await AlarmManager.parseAndSet(cleanText);
       setResponse(message);
       setIsProcessingText(false);
 
@@ -239,9 +239,8 @@ export default function AssistantOverlay() {
       setLastUserQuery(cleanText);
       setIsProcessingText(true);
 
-      const { success, message } = await AlarmManager.parseAndSetTimer(
-        cleanText
-      );
+      const { success, message } =
+        await AlarmManager.parseAndSetTimer(cleanText);
       setResponse(message);
       setIsProcessingText(false);
 
@@ -277,9 +276,8 @@ export default function AssistantOverlay() {
         setResponse(`Sending to ${contactName}...`);
 
         // Resolve contact to phone number
-        const { success, message, phone } = await ContactManager.findContact(
-          contactName
-        ); // We likely need to expose a findContact that returns phone
+        const { success, message, phone } =
+          await ContactManager.findContact(contactName); // We likely need to expose a findContact that returns phone
 
         if (success && phone) {
           WhatsAppManager.send(phone, messageBody);
@@ -308,9 +306,8 @@ export default function AssistantOverlay() {
 
         try {
           // Resolve contact to phone number
-          const { success, message, phone } = await ContactManager.findContact(
-            contactName
-          );
+          const { success, message, phone } =
+            await ContactManager.findContact(contactName);
 
           if (success && phone) {
             // Send SMS using the native module
@@ -371,9 +368,8 @@ export default function AssistantOverlay() {
           return;
         }
 
-        const { success, message } = await ContactManager.findAndCall(
-          targetName
-        );
+        const { success, message } =
+          await ContactManager.findAndCall(targetName);
         setResponse(message);
         setIsProcessingText(false);
 
@@ -397,6 +393,45 @@ export default function AssistantOverlay() {
           return;
         }
       }
+    }
+
+    // 7. Sleep Tracking
+    // Matches: "sleeping", "i am sleeping", "going to sleep"
+    if (
+      cleanText.toLowerCase().includes("sleeping") ||
+      cleanText.toLowerCase().includes("going to sleep")
+    ) {
+      console.log("🌙 Sleep command detected");
+      setLastUserQuery(cleanText);
+      setIsProcessingText(true);
+
+      const { success, message } = await SleepManager.startSleep();
+      setResponse(message);
+      setIsProcessingText(false);
+
+      if (success) {
+        setTimeout(() => handleDismiss(), 2000);
+      }
+      return;
+    }
+
+    // Matches: "woke up", "i'm awake", "i am awake"
+    if (
+      cleanText.toLowerCase().includes("woke up") ||
+      cleanText.toLowerCase().includes("awake")
+    ) {
+      console.log("☀️ Wake up command detected");
+      setLastUserQuery(cleanText);
+      setIsProcessingText(true);
+
+      const { success, message } = await SleepManager.wakeUp();
+      setResponse(message);
+      setIsProcessingText(false);
+
+      if (success) {
+        setTimeout(() => handleDismiss(), 2000);
+      }
+      return;
     }
 
     // 3. AI Fallback
@@ -454,7 +489,7 @@ export default function AssistantOverlay() {
             }
           }
         },
-        100
+        100,
       );
 
       recordingRef.current = newRecording;
@@ -470,12 +505,12 @@ export default function AssistantOverlay() {
         const status = hasSpokenRef.current ? "AFTER_SPEECH" : "WAITING";
 
         console.log(
-          `🔊 [${status}] Volume: ${maxVolumeRef.current}dB | Silence: ${timeSinceSound}ms / ${timeout}ms`
+          `🔊 [${status}] Volume: ${maxVolumeRef.current}dB | Silence: ${timeSinceSound}ms / ${timeout}ms`,
         );
 
         if (timeSinceSound > timeout && isListeningRef.current) {
           console.log(
-            `🔇 Auto-stopping: Silence detected for ${timeSinceSound}ms (${status})`
+            `🔇 Auto-stopping: Silence detected for ${timeSinceSound}ms (${status})`,
           );
           stopRecording();
         }
@@ -484,7 +519,7 @@ export default function AssistantOverlay() {
       console.error("Failed to start recording", err);
       Alert.alert(
         "Recording Error",
-        "Failed to start recording. Please try again."
+        "Failed to start recording. Please try again.",
       );
     }
   };

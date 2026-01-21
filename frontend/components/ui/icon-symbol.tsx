@@ -77,6 +77,8 @@ const MAPPING = {
   "exclamationmark.triangle.fill": "warning",
   circle: "radio-button-unchecked",
   exclamationmark: "priority-high",
+  "bed.double.fill": "hotel",
+  "sun.max.fill": "wb-sunny",
 };
 
 export type IconSymbolName = keyof typeof MAPPING;

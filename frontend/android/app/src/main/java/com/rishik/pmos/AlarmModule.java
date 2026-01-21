@@ -13,6 +13,9 @@ import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 
+// Import AlarmClock for intents
+import android.provider.AlarmClock;
+
 public class AlarmModule extends ReactContextBaseJavaModule {
     private static final String TAG = "AlarmModule";
     private final ReactApplicationContext reactContext;
@@ -108,6 +111,47 @@ public class AlarmModule extends ReactContextBaseJavaModule {
             }
         } else {
             Log.d(TAG, "No active alarm to stop");
+        }
+    }
+
+    @ReactMethod
+    public void setAlarm(int hour, int minute) {
+        try {
+            Intent intent = new Intent(AlarmClock.ACTION_SET_ALARM);
+            intent.putExtra(AlarmClock.EXTRA_HOUR, hour);
+            intent.putExtra(AlarmClock.EXTRA_MINUTES, minute);
+            intent.putExtra(AlarmClock.EXTRA_MESSAGE, "Set by PMOS");
+            intent.putExtra(AlarmClock.EXTRA_SKIP_UI, true);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            
+            if (intent.resolveActivity(getReactApplicationContext().getPackageManager()) != null) {
+                getReactApplicationContext().startActivity(intent);
+                Log.d(TAG, "⏰ Native setAlarm intent fired for " + hour + ":" + minute);
+            } else {
+                Log.e(TAG, "❌ No Activity found to handle SET_ALARM Intent");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Error setting native alarm", e);
+        }
+    }
+
+    @ReactMethod
+    public void setTimer(int seconds) {
+        try {
+            Intent intent = new Intent(AlarmClock.ACTION_SET_TIMER);
+            intent.putExtra(AlarmClock.EXTRA_LENGTH, seconds);
+            intent.putExtra(AlarmClock.EXTRA_MESSAGE, "Set by PMOS");
+            intent.putExtra(AlarmClock.EXTRA_SKIP_UI, true);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            if (intent.resolveActivity(getReactApplicationContext().getPackageManager()) != null) {
+                getReactApplicationContext().startActivity(intent);
+                Log.d(TAG, "⏳ Native setTimer intent fired for " + seconds + " seconds");
+            } else {
+                Log.e(TAG, "❌ No Activity found to handle SET_TIMER Intent");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Error setting native timer", e);
         }
     }
 }

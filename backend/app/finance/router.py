@@ -4,7 +4,7 @@ from common.security import verify_token
 from app.finance.controller import FinanceController
 from app.finance.schema import TransactionCreate, TransactionResponse, PendingTransactionCreate, PendingTransactionResponse, TransactionUpdate
 from typing import List, Optional
-from services.sms_parser import parse_sms_with_gemini
+from services.sms_parser import parse_sms_with_groq
 from services.db import db
 
 router = APIRouter(prefix="/finance")
@@ -59,7 +59,7 @@ async def delete_pending(pending_id: str, user_data: dict = Depends(verify_token
 @router.post("/parse-sms", response_model=ParseSmsResponse)
 async def parse_sms(request: ParseSmsRequest, user_data: dict = Depends(verify_token)):
     """
-    Parse an SMS using Gemini AI and create a transaction if valid.
+    Parse an SMS using Groq AI and create a transaction if valid.
     Pre-validates that the SMS contains a registered account number.
     """
     import re
@@ -93,7 +93,7 @@ async def parse_sms(request: ParseSmsRequest, user_data: dict = Depends(verify_t
             message=f"No matching account found. SMS accounts: {found_acc_numbers}, User accounts: {list(user_account_numbers)}"
         )
     
-    parsed = await parse_sms_with_gemini(request.body, account_list)
+    parsed = await parse_sms_with_groq(request.body, account_list)
     
     if not parsed:
         return ParseSmsResponse(success=False, transaction=None, message="Not a valid transaction SMS")

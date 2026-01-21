@@ -2,6 +2,7 @@ import BackgroundService from "react-native-background-actions";
 // @ts-ignore
 import SmsListener from "react-native-android-sms-listener";
 import { preFilterSms } from "../utils/smsParser";
+import { HealthManager } from "../utils/HealthManager"; // Import HealthManager
 import { auth } from "../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { Platform } from "react-native";
@@ -93,7 +94,17 @@ const backgroundTask = async (taskDataArguments: any) => {
   });
 
   await new Promise<void>(async (resolve) => {
+    let lastHealthSync = 0;
+    const SYNC_INTERVAL = 15 * 60 * 1000; // 15 minutes
+
     while (BackgroundService.isRunning()) {
+      const now = Date.now();
+      if (now - lastHealthSync > SYNC_INTERVAL) {
+        console.log("⏰ Triggering Health Sync...");
+        await HealthManager.trackHourlySteps();
+        lastHealthSync = now;
+      }
+
       await new Promise((r) => setTimeout(r, delay));
     }
     subscription.remove();

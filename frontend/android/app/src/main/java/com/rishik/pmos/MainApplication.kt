@@ -30,6 +30,7 @@ class MainApplication : Application(), ReactApplication {
               add(WhatsAppPackage())
               add(SmsPackage())
               add(AlarmPackage())
+              add(HealthPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"

@@ -29,9 +29,11 @@ model User {
     coreMemories CoreMemory[]
     TaskSection TaskSection[]
     dailyLogs DailyLog[]
-
-    dailyHealthLogs DailyHealthLog[]
-
+    
+    // Goals System
+    goals     Goal[]
+    goalLogs  GoalLog[]
+    
     bankAccounts BankAccount[]
 }
 
@@ -229,6 +231,51 @@ model DailyLog {
   @@index([userId])
 }
 
+// ---------------------------------------------------------
+// GOALS SYSTEM (Unified Health & Habits)
+// ---------------------------------------------------------
+
+model Goal {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title     String
+  target    Int
+  unit      String
+  icon      String
+  isSystem  Boolean  @default(false)
+  category  String   // "health", "learning", "work"
+  
+  logs      GoalLog[]
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, title]) // Prevent duplicate system goals per user
+  @@index([userId])
+}
+
+model GoalLog {
+  id        String   @id @default(uuid())
+  userId    String     // Denormalized for easier querying
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  goalId    String
+  goal      Goal       @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  
+  date      String     // "YYYY-MM-DD"
+  current   Int        @default(0)
+  
+  // Store hourly breakdowns or metadata (JSON)
+  extraData String?
+  
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  @@unique([goalId, date])
+  @@index([userId, date])
+}
+
 model MealItem {
   id          String   @id @default(uuid())
   dailyLogId  String
@@ -242,20 +289,4 @@ model MealItem {
   createdAt   DateTime @default(now())
 
   @@index([dailyLogId])
-}
-
-model DailyHealthLog {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  
-  date      DateTime
-  steps     Int      @default(0)
-  hourlyData String? // JSON string: {"09:00": 500, ...}
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  @@unique([userId, date])
-  @@index([userId])
 }

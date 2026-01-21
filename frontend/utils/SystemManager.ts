@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 
 class SystemManager {
   async handleAction(
-    text: string
+    text: string,
   ): Promise<{ success: boolean; message: string }> {
     const cleanText = text.toLowerCase();
 
@@ -56,22 +56,22 @@ class SystemManager {
       switch (setting) {
         case "wifi":
           await IntentLauncher.startActivityAsync(
-            "android.settings.WIFI_SETTINGS"
+            "android.settings.WIFI_SETTINGS",
           );
           break;
         case "bluetooth":
           await IntentLauncher.startActivityAsync(
-            "android.settings.BLUETOOTH_SETTINGS"
+            "android.settings.BLUETOOTH_SETTINGS",
           );
           break;
         case "battery":
           await IntentLauncher.startActivityAsync(
-            "android.intent.action.POWER_USAGE_SUMMARY"
+            "android.intent.action.POWER_USAGE_SUMMARY",
           );
           break;
         case "airplane":
           await IntentLauncher.startActivityAsync(
-            "android.settings.AIRPLANE_MODE_SETTINGS"
+            "android.settings.AIRPLANE_MODE_SETTINGS",
           );
           break;
         default:
