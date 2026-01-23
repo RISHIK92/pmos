@@ -112,6 +112,20 @@ public class AlarmModule extends ReactContextBaseJavaModule {
         } else {
             Log.d(TAG, "No active alarm to stop");
         }
+
+        // Also clear the intent so it doesn't re-trigger on app reload/foreground
+        try {
+            if (getCurrentActivity() != null) {
+                Intent intent = getCurrentActivity().getIntent();
+                if (intent != null) {
+                    intent.removeExtra("isCriticalAlarm");
+                    intent.removeExtra("title");
+                    Log.d(TAG, "🧹 Cleared critical alarm intent data");
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error clearing intent extras", e);
+        }
     }
 
     @ReactMethod
