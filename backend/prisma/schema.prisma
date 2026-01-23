@@ -34,6 +34,10 @@ model User {
     goals     Goal[]
     goalLogs  GoalLog[]
     
+    // Health Profile
+    gender    String?  // 'male', 'female', etc.
+    periodCycles PeriodCycle[]
+    
     bankAccounts BankAccount[]
 }
 
@@ -289,4 +293,19 @@ model MealItem {
   createdAt   DateTime @default(now())
 
   @@index([dailyLogId])
+}
+model PeriodCycle {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  startDate String   // YYYY-MM-DD
+  endDate   String?  // YYYY-MM-DD
+  
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([userId, startDate])
 }

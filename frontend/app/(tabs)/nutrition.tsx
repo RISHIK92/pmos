@@ -11,20 +11,13 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
   TouchableWithoutFeedback,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { useRouter } from "expo-router";
-import Animated, {
-  FadeInUp,
-  FadeInDown,
-  Layout,
-} from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { SidebarContext } from "./_layout";
 import { auth } from "../../lib/firebase";
-// import Svg, { Circle } from "react-native-svg";
 
 // Types
 type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snack";
@@ -35,74 +28,15 @@ type MealItem = {
   time: string;
 };
 type DailyLog = {
-  date: string; // Display date "15"
-  day: string; // "M", "T", etc.
+  date: string;
+  day: string;
   fullDate: Date;
-  isoDate: string; // "YYYY-MM-DD" (Backend Key)
+  isoDate: string;
   meals: Record<MealType, MealItem[]>;
   goal: number;
 };
 
-// Mock Data
-// Initial Empty History
 const INITIAL_HISTORY: DailyLog[] = [];
-
-// Components
-// const CircularProgress = ({
-//   current,
-//   total,
-//   size = 180,
-//   strokeWidth = 12,
-// }: {
-//   current: number;
-//   total: number;
-//   size?: number;
-//   strokeWidth?: number;
-// }) => {
-//   const radius = (size - strokeWidth) / 2;
-//   const circumference = radius * 2 * Math.PI;
-//   const progress = Math.min(current / total, 1);
-//   const strokeDashoffset = circumference - progress * circumference;
-
-//   return (
-//     <View
-//       style={{
-//         width: size,
-//         height: size,
-//         alignItems: "center",
-//         justifyContent: "center",
-//       }}
-//     >
-//       <Svg width={size} height={size}>
-//         <Circle
-//           stroke="#F1F2F6"
-//           cx={size / 2}
-//           cy={size / 2}
-//           r={radius}
-//           strokeWidth={strokeWidth}
-//           fill="none"
-//         />
-//         <Circle
-//           stroke={progress > 1 ? "#FF7675" : "#000"}
-//           cx={size / 2}
-//           cy={size / 2}
-//           r={radius}
-//           strokeWidth={strokeWidth}
-//           fill="none"
-//           strokeDasharray={circumference}
-//           strokeDashoffset={strokeDashoffset}
-//           strokeLinecap="round"
-//           rotation="-90"
-//           origin={`${size / 2}, ${size / 2}`}
-//         />
-//       </Svg>
-//       <View style={styles.ringContent}>
-//         <Text style={styles.ringValue}>{Math.round(total - current)}</Text>
-//         <Text style={styles.ringLabel}>kcal remaining</Text>
-//       </View>
-//     </View>
-//   );
-// };
 
 export default function NutritionScreen() {
   const { toggleSidebar } = useContext(SidebarContext);
@@ -110,7 +44,6 @@ export default function NutritionScreen() {
   const [history, setHistory] = useState<DailyLog[]>(INITIAL_HISTORY);
   const [loading, setLoading] = useState(false);
 
-  // Modal State
   const [showAddModal, setShowAddModal] = useState(false);
   const [newMealName, setNewMealName] = useState("");
   const [newMealKcal, setNewMealKcal] = useState("");
@@ -141,7 +74,6 @@ export default function NutritionScreen() {
 
       if (res.ok) {
         const data = await res.json();
-
         const formattedHistory = data.map((d: any) => {
           const mealsRecord: Record<MealType, MealItem[]> = {
             Breakfast: [],
@@ -158,8 +90,8 @@ export default function NutritionScreen() {
 
           return {
             ...d,
-            date: d.displayDate, // "15"
-            isoDate: d.date, // "2026-01-15"
+            date: d.displayDate,
+            isoDate: d.date,
             fullDate: new Date(d.fullDate),
             meals: mealsRecord,
           };
@@ -200,11 +132,7 @@ export default function NutritionScreen() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            name: newMealName,
-            kcal,
-            // time, type remain same unless we add fields
-          }),
+          body: JSON.stringify({ name: newMealName, kcal }),
         });
       } else {
         const timeStr = new Date().toLocaleTimeString([], {
@@ -237,7 +165,7 @@ export default function NutritionScreen() {
     }
   };
 
-  const deleteMeal = async (itemId: string, type: MealType) => {
+  const deleteMeal = async (itemId: string) => {
     try {
       const user = auth.currentUser;
       if (!user) return;
@@ -273,38 +201,41 @@ export default function NutritionScreen() {
     setShowAddModal(false);
   };
 
+  const remaining = currentDayLog.goal - currentKcal;
+  const progress = Math.min((currentKcal / currentDayLog.goal) * 100, 100);
+
   return (
     <TouchableWithoutFeedback onPress={() => setActiveMenuItemId(null)}>
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-        {/* Modern Header */}
-        <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <SafeAreaView style={styles.headerContainer}>
           <View style={styles.header}>
-            <TouchableOpacity onPress={toggleSidebar} style={styles.headerBtn}>
-              <IconSymbol name="line.3.horizontal" size={24} color="#1A1A1A" />
+            <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
+              <IconSymbol name="line.3.horizontal" size={24} color="#2D3436" />
             </TouchableOpacity>
-            {/* <Text style={styles.headerTitle}>Nutrition</Text> */}
           </View>
         </SafeAreaView>
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
         >
-          {/* Compact Week Strip */}
-          <View style={styles.weekStripContainer}>
+          {/* Page Intro */}
+          <View style={styles.pageIntro}>
+            <Text style={styles.pageTitle}>Nutrition</Text>
+            <Text style={styles.pageSubtitle}>Track your daily intake</Text>
+          </View>
+
+          {/* Week Strip */}
+          <View style={styles.weekStrip}>
             {history.map((log, index) => {
               const isSelected = index === selectedDayIndex;
-              const isToday = index === 6;
               return (
                 <TouchableOpacity
                   key={index}
-                  style={[
-                    styles.dayItem,
-                    isSelected && styles.dayItemActive,
-                    isToday && !isSelected && styles.dayItemToday,
-                  ]}
+                  style={[styles.dayItem, isSelected && styles.dayItemActive]}
                   onPress={() => setSelectedDayIndex(index)}
                   activeOpacity={0.7}
                 >
@@ -326,155 +257,139 @@ export default function NutritionScreen() {
             })}
           </View>
 
-          {/* Dashboard Card */}
-          <View style={styles.dashboardCard}>
-            {/* <CircularProgress current={currentKcal} total={currentDayLog.goal} /> */}
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Eaten</Text>
-                <Text style={styles.statValue}>{currentKcal}</Text>
-              </View>
-              <View style={[styles.statItem, styles.statBorder]}>
-                <Text style={styles.statLabel}>Goal</Text>
-                <Text style={styles.statValue}>{currentDayLog.goal}</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Burned</Text>
-                <Text style={styles.statValue}>420</Text>
-              </View>
-            </View>
-          </View>
-
           {/* Meal Sections */}
-          <View style={styles.mealsContainer}>
-            {(["Breakfast", "Lunch", "Snack", "Dinner"] as MealType[]).map(
-              (type, index) => (
-                <View key={type} style={styles.mealSection}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>{type}</Text>
-                    <TouchableOpacity
-                      style={styles.addBtnSmall}
-                      onPress={() => {
-                        setSelectedMealType(type);
-                        setShowAddModal(true);
-                      }}
-                    >
-                      <Ionicons name="add" size={20} color="#FFF" />
-                    </TouchableOpacity>
-                  </View>
-
-                  {currentDayLog.meals[type].length > 0 ? (
-                    currentDayLog.meals[type].map((item, i) => (
-                      <Animated.View
-                        key={item.id}
-                        entering={FadeInDown.delay(
-                          index * 100 + i * 50
-                        ).springify()}
-                        style={styles.mealCard}
-                      >
-                        <View style={styles.mealRow}>
-                          <View style={styles.mealContent}>
-                            <Text style={styles.mealName}>{item.name}</Text>
-                            <Text style={styles.mealTime}>{item.time}</Text>
-                          </View>
-                          <View style={styles.kcalBadge}>
-                            <Text style={styles.kcalText}>
-                              {item.kcal} kcal
-                            </Text>
-                          </View>
-
-                          <View style={{ position: "relative", marginLeft: 8 }}>
-                            <TouchableOpacity
-                              onPress={() =>
-                                setActiveMenuItemId(
-                                  activeMenuItemId === item.id ? null : item.id
-                                )
-                              }
-                              style={styles.moreBtn}
-                            >
-                              <Ionicons
-                                name="ellipsis-vertical"
-                                size={16}
-                                color="#B2BEC3"
-                              />
-                            </TouchableOpacity>
-
-                            {activeMenuItemId === item.id && (
-                              <View style={styles.menuPopup}>
-                                <TouchableOpacity
-                                  style={styles.menuItem}
-                                  onPress={() => openEditModal(item, type)}
-                                >
-                                  <Ionicons
-                                    name="pencil-outline"
-                                    size={16}
-                                    color="#2D3436"
-                                  />
-                                  {/* <Text style={styles.menuText}>Edit</Text> */}
-                                </TouchableOpacity>
-                                <View style={styles.menuDivider} />
-                                <TouchableOpacity
-                                  style={styles.menuItem}
-                                  onPress={() => deleteMeal(item.id, type)}
-                                >
-                                  <Ionicons
-                                    name="trash-outline"
-                                    size={16}
-                                    color="#FF7675"
-                                  />
-                                  {/* <Text style={[styles.menuText, { color: '#FF7675' }]}>Delete</Text> */}
-                                </TouchableOpacity>
-                              </View>
-                            )}
-                          </View>
-                        </View>
-                      </Animated.View>
-                    ))
-                  ) : (
-                    <View style={styles.emptyState}>
-                      <Text style={styles.emptyText}>No meals logged</Text>
-                    </View>
-                  )}
+          {(["Breakfast", "Lunch", "Snack", "Dinner"] as MealType[]).map(
+            (type, sectionIndex) => (
+              <View key={type} style={styles.mealSection}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>{type}</Text>
+                  <TouchableOpacity
+                    style={styles.addBtn}
+                    onPress={() => {
+                      setSelectedMealType(type);
+                      setShowAddModal(true);
+                    }}
+                  >
+                    <IconSymbol name="plus" size={18} color="#FFF" />
+                  </TouchableOpacity>
                 </View>
-              )
-            )}
-          </View>
+
+                {currentDayLog.meals[type].length > 0 ? (
+                  currentDayLog.meals[type].map((item, i) => (
+                    <Animated.View
+                      key={item.id}
+                      entering={FadeInDown.delay(
+                        sectionIndex * 100 + i * 50,
+                      ).springify()}
+                      style={styles.mealCard}
+                    >
+                      <View style={styles.mealRow}>
+                        <View style={styles.mealContent}>
+                          <Text style={styles.mealName}>{item.name}</Text>
+                          <Text style={styles.mealTime}>{item.time}</Text>
+                        </View>
+                        <View style={styles.kcalBadge}>
+                          <Text style={styles.kcalText}>{item.kcal}</Text>
+                          <Text style={styles.kcalUnit}>kcal</Text>
+                        </View>
+
+                        <View style={{ position: "relative", marginLeft: 8 }}>
+                          <TouchableOpacity
+                            onPress={() =>
+                              setActiveMenuItemId(
+                                activeMenuItemId === item.id ? null : item.id,
+                              )
+                            }
+                            style={styles.moreBtn}
+                          >
+                            <Ionicons
+                              name="ellipsis-vertical"
+                              size={16}
+                              color="#B2BEC3"
+                            />
+                          </TouchableOpacity>
+
+                          {activeMenuItemId === item.id && (
+                            <View style={styles.menuPopup}>
+                              <TouchableOpacity
+                                style={styles.menuItem}
+                                onPress={() => openEditModal(item, type)}
+                              >
+                                <Ionicons
+                                  name="pencil-outline"
+                                  size={16}
+                                  color="#2D3436"
+                                />
+                              </TouchableOpacity>
+                              <View style={styles.menuDivider} />
+                              <TouchableOpacity
+                                style={styles.menuItem}
+                                onPress={() => deleteMeal(item.id)}
+                              >
+                                <Ionicons
+                                  name="trash-outline"
+                                  size={16}
+                                  color="#FF7675"
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </Animated.View>
+                  ))
+                ) : (
+                  <TouchableOpacity
+                    style={styles.emptyState}
+                    onPress={() => {
+                      setSelectedMealType(type);
+                      setShowAddModal(true);
+                    }}
+                  >
+                    <Text style={styles.emptyText}>
+                      Tap to add {type.toLowerCase()}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ),
+          )}
         </ScrollView>
 
+        {/* Add/Edit Modal */}
         <Modal visible={showAddModal} animationType="slide" transparent>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.modalOverlay}
           >
             <View style={styles.modalContent}>
-              <View style={styles.modalHeaderRow}>
+              <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
-                  {editingItem ? "Edit Meal" : `Add to ${selectedMealType}`}
+                  {editingItem ? "Edit Meal" : `Add ${selectedMealType}`}
                 </Text>
-                <TouchableOpacity
-                  onPress={resetModal}
-                  style={styles.closeModalBtn}
-                >
-                  <Ionicons name="close" size={24} color="#636E72" />
+                <TouchableOpacity onPress={resetModal}>
+                  <IconSymbol name="xmark.circle.fill" size={24} color="#ccc" />
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.inputContainer}>
+              <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Meal Name</Text>
                 <TextInput
-                  style={styles.modalInput}
+                  style={styles.input}
                   placeholder="e.g. Avocado Toast"
+                  placeholderTextColor="#B2BEC3"
                   value={newMealName}
                   onChangeText={setNewMealName}
                   autoFocus
                 />
               </View>
 
-              <View style={styles.inputContainer}>
+              <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Calories</Text>
                 <TextInput
-                  style={styles.modalInput}
+                  style={styles.input}
                   placeholder="e.g. 450"
+                  placeholderTextColor="#B2BEC3"
                   value={newMealKcal}
                   onChangeText={setNewMealKcal}
                   keyboardType="numeric"
@@ -488,7 +403,6 @@ export default function NutritionScreen() {
                 <Text style={styles.saveButtonText}>
                   {editingItem ? "Save Changes" : "Add Meal"}
                 </Text>
-                <IconSymbol name="arrow.right" size={20} color="#FFF" />
               </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
@@ -501,67 +415,69 @@ export default function NutritionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA", // Light grey bg
+    backgroundColor: "#FFFFFF",
   },
-  safeArea: {
-    backgroundColor: "#F8F9FA",
+  headerContainer: {
+    backgroundColor: "#FFFFFF",
+    zIndex: 10,
+    paddingTop: Platform.OS === "android" ? 30 : 0,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
   },
-  headerBtn: {
+  menuButton: {
     padding: 8,
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#F1F2F6",
+    paddingTop: 14,
   },
-  headerTitle: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1A1A1A",
-  },
-  scrollContainer: {
+  scrollContent: {
+    paddingHorizontal: 24,
     paddingBottom: 40,
   },
-  weekStripContainer: {
+  pageIntro: {
+    marginBottom: 30,
+  },
+  pageTitle: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#000",
+    marginBottom: 4,
+    letterSpacing: -1,
+  },
+  pageSubtitle: {
+    fontSize: 16,
+    color: "#B2BEC3",
+    fontWeight: "500",
+  },
+
+  // Week Strip
+  weekStrip: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    marginBottom: 20,
-    backgroundColor: "#FFF",
-    marginHorizontal: 16,
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    padding: 8,
+    padding: 6,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#F0F2F5",
   },
   dayItem: {
     flex: 1,
-    flexDirection: "column",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingVertical: 10,
     borderRadius: 12,
   },
   dayItemActive: {
     backgroundColor: "#000",
-  },
-  dayItemToday: {
-    backgroundColor: "rgba(0,0,0,0.05)",
   },
   dayText: {
     fontSize: 10,
     fontWeight: "600",
     color: "#B2BEC3",
     textTransform: "uppercase",
-    marginBottom: 2,
+    marginBottom: 4,
   },
   dayTextActive: {
     color: "rgba(255,255,255,0.7)",
@@ -575,124 +491,103 @@ const styles = StyleSheet.create({
     color: "#FFF",
   },
 
-  // Dashboard
-  dashboardCard: {
-    backgroundColor: "#FFF",
-    marginHorizontal: 20,
-    borderRadius: 32,
-    padding: 24,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
-    shadowRadius: 24,
-    elevation: 2,
+  // Summary Card
+  summaryCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 12,
     marginBottom: 32,
   },
-  ringContent: {
-    position: "absolute",
+  summaryMain: {
     alignItems: "center",
-    justifyContent: "center",
+    marginBottom: 20,
   },
-  ringValue: {
-    fontSize: 32,
+  summaryCenter: {
+    alignItems: "center",
+  },
+  summaryValue: {
+    fontSize: 48,
     fontWeight: "800",
-    color: "#1A1A1A",
-    letterSpacing: -1,
+    color: "#000",
+    letterSpacing: -2,
   },
-  ringLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#B2BEC3",
-    textTransform: "uppercase",
+  summaryLabel: {
+    fontSize: 14,
+    color: "#636E72",
+    fontWeight: "500",
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: "#E0E0E0",
+    borderRadius: 3,
+    marginBottom: 20,
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: "#000",
+    borderRadius: 3,
   },
   statsRow: {
     flexDirection: "row",
-    width: "100%",
     justifyContent: "space-between",
   },
   statItem: {
     flex: 1,
     alignItems: "center",
+    gap: 4,
   },
   statBorder: {
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: "#F5F6FA",
+    borderColor: "#E0E0E0",
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#000",
   },
   statLabel: {
     fontSize: 12,
-    fontWeight: "600",
     color: "#B2BEC3",
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1A1A1A",
+    fontWeight: "500",
   },
 
-  // Meals
-  mealsContainer: {
-    paddingHorizontal: 20,
-    gap: 24,
-  },
+  // Meal Sections
   mealSection: {
-    gap: 12,
+    marginBottom: 28,
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1A1A1A",
-    letterSpacing: -0.5,
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#000",
   },
-  addBtnSmall: {
+  addBtn: {
     width: 32,
     height: 32,
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: "#000",
     alignItems: "center",
     justifyContent: "center",
   },
-  emptyState: {
-    padding: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F1F2F6",
-    borderRadius: 20,
-    borderStyle: "dashed",
-    borderWidth: 1,
-    borderColor: "#E1E1E1",
-  },
-  emptyText: {
-    color: "#B2BEC3",
-    fontSize: 14,
-    fontWeight: "500",
-  },
   mealCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
     padding: 16,
-    borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
+    borderRadius: 16,
+    marginBottom: 8,
   },
   mealRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
   },
   mealContent: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
   mealName: {
     fontSize: 16,
@@ -705,82 +600,19 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   kcalBadge: {
-    backgroundColor: "#F5F6FA",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 2,
   },
   kcalText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1A1A1A",
-  },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.4)",
-  },
-  modalContent: {
-    backgroundColor: "#FFF",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    padding: 32,
-    paddingBottom: platformBodyPadding(),
-  },
-  modalHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 32,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1A1A1A",
-  },
-  closeModalBtn: {
-    padding: 8,
-    backgroundColor: "#F5F6FA",
-    borderRadius: 50,
-  },
-  inputContainer: {
-    marginBottom: 24,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#636E72",
-    marginBottom: 8,
-    textTransform: "uppercase",
-  },
-  modalInput: {
     fontSize: 18,
-    fontWeight: "600",
-    color: "#1A1A1A",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F2F6",
-    paddingBottom: 12,
-  },
-  saveButton: {
-    backgroundColor: "#000",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 20,
-    borderRadius: 24,
-    gap: 12,
-    marginTop: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    elevation: 8,
-  },
-  saveButtonText: {
-    fontSize: 16,
     fontWeight: "700",
-    color: "#FFF",
+    color: "#000",
+  },
+  kcalUnit: {
+    fontSize: 12,
+    color: "#B2BEC3",
+    fontWeight: "500",
   },
   moreBtn: {
     padding: 4,
@@ -803,22 +635,80 @@ const styles = StyleSheet.create({
   },
   menuItem: {
     padding: 8,
-    // flexDirection: 'row',
-    // alignItems: 'center',
-    // gap: 8,
-  },
-  menuText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#2D3436",
   },
   menuDivider: {
     width: 1,
     height: 16,
     backgroundColor: "#F1F2F6",
   },
-});
+  emptyState: {
+    padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderStyle: "dashed",
+    borderWidth: 1,
+    borderColor: "#DFE6E9",
+  },
+  emptyText: {
+    color: "#B2BEC3",
+    fontSize: 14,
+    fontWeight: "500",
+  },
 
-function platformBodyPadding() {
-  return Platform.OS === "ios" ? 48 : 32;
-}
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 32,
+    paddingBottom: Platform.OS === "ios" ? 48 : 32,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#000",
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#636E72",
+    marginBottom: 8,
+    textTransform: "uppercase",
+  },
+  input: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#000",
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderRadius: 12,
+  },
+  saveButton: {
+    backgroundColor: "#000",
+    paddingVertical: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFF",
+  },
+});

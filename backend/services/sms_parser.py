@@ -167,7 +167,7 @@ RULES:
 - "credited", "received", "refund" → type: "credit"
 - amount must be a number (no currency symbols)
 - account_last_4 must be exactly 4 digits from the SMS
-- merchant must be the name of the person amount recieved or sent to
+- merchant must be the name of the person amount recieved or sent to and dont leave it unknown
 - category options: Food, Shopping, Transport, Bills, Entertainment, Health, Transfer, Salary, Other
 - Return ONLY valid JSON, no markdown blocks, no explanations, no extra text
 """

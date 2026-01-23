@@ -149,10 +149,18 @@ const WEEKLY_TRENDS = [
 export default function HealthScreen() {
   const router = useRouter();
   const { toggleSidebar } = useContext(SidebarContext);
-  const [waterCount, setWaterCount] = useState(4);
-  const [selectedStat, setSelectedStat] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>("Daily");
+  const [selectedStat, setSelectedStat] = useState<string | null>(null);
+
+  // Period Tracking State
+  const [waterCount, setWaterCount] = useState(4);
   const [steps, setSteps] = useState(0);
+  const [gender, setGender] = useState<string | null>(null);
+  const [periodData, setPeriodData] = useState<any>(null);
+  const [showGenderModal, setShowGenderModal] = useState(false);
+  const [showPeriodModal, setShowPeriodModal] = useState(false);
+  const [periodDate, setPeriodDate] = useState(new Date());
+
   const [chartData, setChartData] = useState<{
     labels: string[];
     values: number[];
@@ -175,53 +183,44 @@ export default function HealthScreen() {
     const basicGoals = await HealthManager.getDashboardData(today);
 
     if (basicGoals && basicGoals.length > 0) {
-      const ids = basicGoals.map((g: any) => g.id);
-      const detailedGoals = await HealthManager.getGoalsDetails(ids, true); // true = include logs
+      const newMetrics = [...HEALTH_METRICS_INITIAL];
 
-      if (detailedGoals && detailedGoals.length > 0) {
-        const newMetrics = [...HEALTH_METRICS_INITIAL];
+      basicGoals.forEach((goal: any) => {
+        const currentVal = goal.current || 0;
 
-        detailedGoals.forEach((goal: any) => {
-          // Find today's log
-          const todayLog =
-            goal.logs && goal.logs.length > 0
-              ? goal.logs.find((l: any) => l.date === today)
-              : null;
-          const currentVal = todayLog ? todayLog.current : 0;
-
-          if (goal.title === "Daily Steps") {
-            const idx = newMetrics.findIndex((m) => m.id === "steps");
-            if (idx !== -1) {
-              newMetrics[idx].value = currentVal.toString();
-              newMetrics[idx].subValue = `/ ${goal.target}`;
-            }
-          } else if (goal.title === "Sleep") {
-            const idx = newMetrics.findIndex((m) => m.id === "sleep");
-            if (idx !== -1) {
-              const hours = Math.floor(currentVal / 60);
-              const mins = currentVal % 60;
-              newMetrics[idx].value = `${hours}h ${mins}m`;
-              newMetrics[idx].subValue = `/ ${Math.floor(goal.target / 60)}h`;
-            }
-          } else if (goal.title === "Hydration") {
-            const idx = newMetrics.findIndex((m) => m.id === "hydration");
-            if (idx !== -1) {
-              newMetrics[idx].value = `${currentVal}`;
-              newMetrics[idx].subValue = `/ ${goal.target}ml`;
-
-              // Update local waterCount for the tracker UI
-              setWaterCount(currentVal / 250);
-            }
-          } else if (goal.title === "Calories") {
-            const idx = newMetrics.findIndex((m) => m.id === "calories");
-            if (idx !== -1) {
-              newMetrics[idx].value = `${currentVal}`;
-              newMetrics[idx].subValue = `/ ${goal.target} kcal`;
-            }
+        if (goal.title === "Daily Steps") {
+          const idx = newMetrics.findIndex((m) => m.id === "steps");
+          if (idx !== -1) {
+            newMetrics[idx].value = currentVal.toString();
+            newMetrics[idx].subValue = `/ ${goal.target}`;
           }
-        });
-        setMetrics(newMetrics);
-      }
+        } else if (goal.title === "Sleep") {
+          const idx = newMetrics.findIndex((m) => m.id === "sleep");
+          if (idx !== -1) {
+            const hours = Math.floor(currentVal / 60);
+            const mins = currentVal % 60;
+            newMetrics[idx].value = `${hours}h ${mins}m`;
+            newMetrics[idx].subValue = `/ ${Math.floor(goal.target / 60)}h`;
+          }
+        } else if (goal.title === "Hydration") {
+          const idx = newMetrics.findIndex((m) => m.id === "hydration");
+          if (idx !== -1) {
+            newMetrics[idx].value = `${currentVal}`;
+            newMetrics[idx].subValue = `/ ${goal.target}ml`;
+
+            // Update local waterCount for the tracker UI
+            setWaterCount(currentVal / 250);
+          }
+        } else if (goal.title === "Calories") {
+          const idx = newMetrics.findIndex((m) => m.id === "calories");
+          if (idx !== -1) {
+            newMetrics[idx].value = `${currentVal}`;
+            newMetrics[idx].subValue = `/ ${goal.target} kcal`;
+          }
+        }
+      });
+
+      setMetrics(newMetrics);
     }
   };
 
@@ -264,6 +263,36 @@ export default function HealthScreen() {
     }
   }, [selectedStat, hydrationDate]);
 
+  const fetchPeriodData = async () => {
+    const data = await HealthManager.getPeriodData();
+    if (data) {
+      setGender(data.gender);
+      setPeriodData(data);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchPeriodData();
+  }, []);
+
+  const handleUpdateGender = async (selected: string) => {
+    const success = await HealthManager.updateGender(selected);
+    if (success) {
+      setGender(selected);
+      setShowGenderModal(false);
+      fetchPeriodData();
+    }
+  };
+
+  const handleLogPeriod = async () => {
+    const dateStr = formatLocalYYYYMMDD(periodDate);
+    const success = await HealthManager.logPeriod(dateStr);
+    if (success) {
+      setShowPeriodModal(false);
+      fetchPeriodData();
+    }
+  };
+
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
     if (selectedDate) {
@@ -289,37 +318,35 @@ export default function HealthScreen() {
 
   React.useEffect(() => {
     const fetchChartData = async () => {
-      if (!selectedStat || selectedStat !== "steps") return;
+      if (!selectedStat) return;
 
       let labels: string[] = [];
       let values: number[] = [];
 
       if (period === "Daily") {
-        const hourlyLog = await HealthManager.getHourlyLog();
-        // hourlyLog is { "09:00": 1200, ... }
-        // We want to show a few data points.
-        // Let's simplified: pick every 4 hours? Or just show what we have.
-        // For now, let's just show standard time slots and find closest value.
-        const timeSlots = ["6am", "9am", "12pm", "3pm", "6pm", "9pm"];
-        labels = timeSlots;
-        values = timeSlots.map((slot) => {
-          // Very rough mapping for demo to avoid complex time parsing logic right now
-          // "6am" -> "06:00", etc.
-          // In a real app we'd iterate keys.
-          return 0.5; // Placeholder until we have real data populated
-          // TODO: Better mapping
-        });
+        if (selectedStat === "steps") {
+          const hourlyLog = await HealthManager.getHourlyLog();
+          const timeSlots = ["6am", "9am", "12pm", "3pm", "6pm", "9pm"];
+          labels = timeSlots;
 
-        // Better: Map existing keys to values, normalize
-        const keys = Object.keys(hourlyLog).sort();
-        if (keys.length > 0) {
-          labels = keys.filter((_, i) => i % 2 === 0); // Show every other key
-          const rawVals = keys.map((k) => hourlyLog[k]);
-          const max = Math.max(...rawVals, 1000); // Avoid div by 0
-          values = keys
-            .map((k) => hourlyLog[k] / max)
-            .filter((_, i) => i % 2 === 0);
+          // Map existing keys to values, normalize
+          const keys = Object.keys(hourlyLog).sort();
+          if (keys.length > 0) {
+            // Simplified visualization for daily steps
+            // Just show representative points if available, else placeholder logic was existing
+            // Let's use the logic that was there but cleaner
+            labels = keys.filter((_, i) => i % 2 === 0);
+            const rawVals = keys.map((k) => hourlyLog[k]);
+            const max = Math.max(...rawVals, 1000);
+            values = keys
+              .map((k) => hourlyLog[k] / max)
+              .filter((_, i) => i % 2 === 0);
+          } else {
+            // Fallback if no hourly log
+            values = timeSlots.map(() => 0);
+          }
         }
+        // Daily charts for others (Sleep/Hydration) not supported yet (no hourly data)
       } else if (period === "Weekly" || period === "Monthly") {
         const end = new Date();
         const start = new Date();
@@ -331,28 +358,44 @@ export default function HealthScreen() {
           formatLocalYYYYMMDD(end),
         );
 
+        // Map field based on stat
+        const getValue = (h: any) => {
+          if (selectedStat === "steps") return Number(h.steps || 0);
+          if (selectedStat === "sleep") return Number(h.sleepDuration || 0);
+          if (selectedStat === "hydration") return Number(h.waterIntake || 0);
+          if (selectedStat === "calories") return Number(h.calories || 0);
+          return 0;
+        };
+
+        const getTarget = () => {
+          if (selectedStat === "steps") return 10000;
+          if (selectedStat === "sleep") return 480; // 8h
+          if (selectedStat === "hydration") return 2000;
+          if (selectedStat === "calories") return 2000;
+          return 100;
+        };
+
         // Zero-fill logic
+        const dateMap = new Map<string, number>(
+          history.map((h: any) => [h.date.split("T")[0], getValue(h)]),
+        );
+
         const filledData: {
           date: string;
-          steps: number;
+          val: number;
           day: number;
-          fullDate: Date;
         }[] = [];
-        const dateMap = new Map<string, number>(
-          history.map((h: any) => [h.date.split("T")[0], Number(h.steps)]),
-        );
 
         for (let i = 0; i < days; i++) {
           const d = new Date(start);
           d.setDate(d.getDate() + i);
           const dateStr = formatLocalYYYYMMDD(d);
-          const steps = dateMap.get(dateStr) || 0;
+          const val = dateMap.get(dateStr) || 0;
 
           filledData.push({
             date: dateStr,
-            steps,
+            val,
             day: d.getDay(),
-            fullDate: d,
           });
         }
 
@@ -360,8 +403,8 @@ export default function HealthScreen() {
           labels = filledData.map(
             (d) => ["S", "M", "T", "W", "T", "F", "S"][d.day],
           );
-          const rawVals = filledData.map((d) => d.steps);
-          const max = Math.max(...rawVals, 10000);
+          const rawVals = filledData.map((d) => d.val);
+          const max = Math.max(...rawVals, getTarget());
           values = rawVals.map((v) => v / max);
         } else {
           // Monthly: Aggregate into 4 weeks
@@ -370,23 +413,25 @@ export default function HealthScreen() {
 
           filledData.forEach((d, index) => {
             const bucketIndex = Math.min(Math.floor(index / 7), 3);
-            weeklyBuckets[bucketIndex] += d.steps;
+            weeklyBuckets[bucketIndex] += d.val;
           });
 
-          // Average steps per day for that week
+          // Average per day for that week
           const averagedBuckets = weeklyBuckets.map((total, idx) => {
             const count = idx === 3 ? days - 21 : 7;
             return total / count;
           });
 
           labels = weeklyLabels;
-          const max = Math.max(...averagedBuckets, 10000);
+          const max = Math.max(...averagedBuckets, getTarget());
           values = averagedBuckets.map((v) => v / max);
         }
       }
 
       if (labels.length > 0) {
         setChartData({ labels, values });
+      } else {
+        setChartData({ labels: [], values: [] });
       }
     };
 
@@ -929,16 +974,379 @@ export default function HealthScreen() {
     );
   };
 
+  const [showPeriodHistory, setShowPeriodHistory] = useState(false);
+
+  const renderPeriodHistoryModal = () => (
+    <Modal
+      visible={showPeriodHistory}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowPeriodHistory(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Cycle History</Text>
+            <TouchableOpacity onPress={() => setShowPeriodHistory(false)}>
+              <IconSymbol name="xmark.circle.fill" size={24} color="#ccc" />
+            </TouchableOpacity>
+          </View>
+
+          {periodData?.history && periodData.history.length > 0 ? (
+            <ScrollView style={{ maxHeight: 300 }}>
+              {periodData.history.map((cycle: any, idx: number) => {
+                const startDate = new Date(cycle.startDate);
+                const daysAgo = Math.floor(
+                  (new Date().getTime() - startDate.getTime()) /
+                    (1000 * 3600 * 24),
+                );
+                return (
+                  <View
+                    key={cycle.id || idx}
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingVertical: 12,
+                      borderBottomWidth:
+                        idx < periodData.history.length - 1 ? 1 : 0,
+                      borderBottomColor: "#F0F0F0",
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: "#FF69B4",
+                        }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 16,
+                          fontWeight: "600",
+                          color: "#000",
+                        }}
+                      >
+                        {cycle.startDate}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 13, color: "#999" }}>
+                      {daysAgo} days ago
+                    </Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <Text style={{ textAlign: "center", color: "#999", marginTop: 20 }}>
+              No cycle history yet
+            </Text>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderPeriodSection = () => {
+    if (gender !== "female") return null;
+
+    const lastPeriod = periodData?.lastPeriodDate;
+    const nextPeriod = periodData?.nextPeriodDate;
+    const daysLate = periodData?.daysLate || 0;
+    const isLate = periodData?.isLate;
+
+    // Calculate days ago
+    let daysAgo = 0;
+    if (lastPeriod) {
+      const lp = new Date(lastPeriod);
+      const today = new Date();
+      const diff = today.getTime() - lp.getTime();
+      daysAgo = Math.floor(diff / (1000 * 3600 * 24));
+    }
+
+    return (
+      <>
+        {/* History Button */}
+        <TouchableOpacity
+          onPress={() => setShowPeriodHistory(true)}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            marginBottom: 8,
+            gap: 6,
+          }}
+        >
+          <IconSymbol name="calendar" size={16} color="#FF69B4" />
+          <Text style={{ fontSize: 13, color: "#FF69B4", fontWeight: "500" }}>
+            View History
+          </Text>
+        </TouchableOpacity>
+
+        <View
+          style={[
+            styles.chartCard,
+            { marginTop: 2, borderColor: "#FFC0CB", borderWidth: 1 },
+          ]}
+        >
+          <View style={[styles.chartHeader, { marginBottom: 15 }]}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: "#FFF0F5",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <IconSymbol name="heart.fill" size={18} color="#FF69B4" />
+              </View>
+              <Text style={styles.chartTitle}>Cycle Tracking</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowPeriodModal(true)}
+              style={{
+                backgroundColor: "#FF69B4",
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 15,
+              }}
+            >
+              <Text style={{ color: "#fff", fontSize: 12, fontWeight: "600" }}>
+                Log Period
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginBottom: 10,
+            }}
+          >
+            <View>
+              <Text style={{ fontSize: 12, color: "#666" }}>Last Period</Text>
+              {lastPeriod ? (
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "600",
+                    color: "#000",
+                    marginTop: 4,
+                  }}
+                >
+                  {lastPeriod}{" "}
+                  <Text
+                    style={{ fontSize: 12, color: "#999", fontWeight: "400" }}
+                  >
+                    {" "}
+                    ({daysAgo} days ago)
+                  </Text>
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 14, color: "#999", marginTop: 4 }}>
+                  No data yet
+                </Text>
+              )}
+            </View>
+            <View>
+              <Text style={{ fontSize: 12, color: "#666", textAlign: "right" }}>
+                Next Expected
+              </Text>
+              {nextPeriod ? (
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "600",
+                    color: "#000",
+                    marginTop: 4,
+                    textAlign: "right",
+                  }}
+                >
+                  {nextPeriod}
+                </Text>
+              ) : (
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: "#999",
+                    marginTop: 4,
+                    textAlign: "right",
+                  }}
+                >
+                  -
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {isLate && (
+            <View
+              style={{
+                marginTop: 10,
+                padding: 10,
+                backgroundColor: "#FFF0F5",
+                borderRadius: 10,
+                borderLeftWidth: 3,
+                borderLeftColor: "#FF1493",
+              }}
+            >
+              <Text
+                style={{ color: "#C71585", fontWeight: "600", fontSize: 13 }}
+              >
+                {daysAgo > 40
+                  ? "Cycle might be missed"
+                  : "Period is likely late"}
+              </Text>
+              <Text style={{ color: "#C71585", fontSize: 12, marginTop: 2 }}>
+                {daysAgo > 40
+                  ? `It's been ${daysAgo} days since your last period. Have you missed it?`
+                  : `You are ${daysLate} days past your expected date.`}
+              </Text>
+            </View>
+          )}
+        </View>
+        {renderPeriodHistoryModal()}
+      </>
+    );
+  };
+
+  const [showPeriodDatePicker, setShowPeriodDatePicker] = useState(false);
+
+  const renderPeriodModal = () => (
+    <Modal
+      visible={showPeriodModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowPeriodModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Log Period Start</Text>
+            <TouchableOpacity onPress={() => setShowPeriodModal(false)}>
+              <IconSymbol name="xmark.circle.fill" size={24} color="#ccc" />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={{ fontSize: 14, color: "#666", marginBottom: 20 }}>
+            Select the date your period started:
+          </Text>
+
+          {/* Date Selection Button */}
+          <TouchableOpacity
+            onPress={() => setShowPeriodDatePicker(true)}
+            style={{
+              backgroundColor: "#F8F9FA",
+              padding: 16,
+              borderRadius: 12,
+              alignItems: "center",
+              marginBottom: 10,
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: "600", color: "#000" }}>
+              {formatLocalYYYYMMDD(periodDate)}
+            </Text>
+            <Text style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+              Tap to change
+            </Text>
+          </TouchableOpacity>
+
+          {showPeriodDatePicker && (
+            <DateTimePicker
+              value={periodDate}
+              mode="date"
+              display={Platform.OS === "android" ? "default" : "spinner"}
+              onChange={(e, d) => {
+                // Always dismiss on Android (both OK and Cancel trigger this)
+                if (Platform.OS === "android") {
+                  setShowPeriodDatePicker(false);
+                }
+                // Only update date if user selected one (not cancelled)
+                if (d) setPeriodDate(d);
+              }}
+              maximumDate={new Date()}
+            />
+          )}
+
+          <TouchableOpacity
+            onPress={handleLogPeriod}
+            style={[
+              styles.actionButton,
+              { backgroundColor: "#FF69B4", marginTop: 20 },
+            ]}
+          >
+            <Text style={styles.actionButtonText}>Save Log</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderGenderModal = () => (
+    <Modal
+      visible={showGenderModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowGenderModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, { width: "100%" }]}>
+          <Text style={[styles.modalTitle, { textAlign: "center" }]}>
+            Health Profile
+          </Text>
+          <Text
+            style={{ textAlign: "center", color: "#666", marginBottom: 20 }}
+          >
+            To enable cycle tracking, please confirm your gender. This is
+            private and only used for health features.
+          </Text>
+
+          <TouchableOpacity
+            onPress={() => handleUpdateGender("female")}
+            style={[
+              styles.actionButton,
+              { backgroundColor: "#FF69B4", marginBottom: 10 },
+            ]}
+          >
+            <Text style={styles.actionButtonText}>Female</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => handleUpdateGender("male")}
+            style={[styles.actionButton, { backgroundColor: "#444" }]}
+          >
+            <Text style={styles.actionButtonText}>Male</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      {selectedStat === "sleep"
-        ? renderSleepDetail()
-        : selectedStat === "hydration"
-          ? renderHydrationDetail()
-          : renderDetailModal()}
+
+      {/* Conditional Detail Modals */}
+      {selectedStat === "sleep" && renderSleepDetail()}
+      {selectedStat === "hydration" && renderHydrationDetail()}
+      {selectedStat &&
+        selectedStat !== "sleep" &&
+        selectedStat !== "hydration" &&
+        renderDetailModal()}
 
       {/* Header */}
       <SafeAreaView style={styles.headerContainer}>
@@ -946,6 +1354,18 @@ export default function HealthScreen() {
           <View style={styles.headerLeft}>
             <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
               <IconSymbol name="line.3.horizontal" size={24} color="#2D3436" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={() => setShowGenderModal(true)}
+              style={styles.menuButton}
+            >
+              <IconSymbol
+                name="person.crop.circle"
+                size={24}
+                color={gender === "female" ? "#FF69B4" : "#2D3436"}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -997,6 +1417,8 @@ export default function HealthScreen() {
               </TouchableOpacity>
             ))}
         </View>
+
+        {renderPeriodSection()}
 
         {/* Hydration Tracker */}
         <View style={styles.sectionContainer}>
@@ -1097,6 +1519,8 @@ export default function HealthScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      {renderGenderModal()}
+      {renderPeriodModal()}
     </View>
   );
 }
@@ -1520,6 +1944,37 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingBottom: 4,
   },
+
+  // Period Section Styles
+  chartCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+  },
+  chartHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  chartTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#000",
+  },
+  actionButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
   chartBarGroup: {
     alignItems: "center",
     gap: 8,

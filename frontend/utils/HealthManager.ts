@@ -250,6 +250,67 @@ export const HealthManager = {
     }
   },
 
+  updateGender: async (gender: string) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return false;
+      const token = await user.getIdToken();
+
+      const res = await fetch(`${BACKEND_URL}/health/gender`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ gender }),
+      });
+      const data = await res.json();
+      return data.success;
+    } catch (e) {
+      console.error("Failed to update gender", e);
+      return false;
+    }
+  },
+
+  getPeriodData: async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return null;
+      const token = await user.getIdToken();
+
+      const res = await fetch(`${BACKEND_URL}/health/period`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      return data.success ? data.data : null;
+    } catch (e) {
+      console.error("Failed to fetch period data", e);
+      return null;
+    }
+  },
+
+  logPeriod: async (date: string) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return false;
+      const token = await user.getIdToken();
+
+      const res = await fetch(`${BACKEND_URL}/health/period`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ date }),
+      });
+      const data = await res.json();
+      return data.success;
+    } catch (e) {
+      console.error("Failed to log period", e);
+      return false;
+    }
+  },
+
   stop: () => {
     if (Platform.OS === "android") {
       HealthModule.stopStepTracking();

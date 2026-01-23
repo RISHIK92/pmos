@@ -326,3 +326,33 @@ async def get_goal_details(request: GoalDetailsRequest, user: User = Depends(ver
         return {"success": True, "data": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+class UpdateGenderRequest(BaseModel):
+    gender: str
+
+class LogPeriodRequest(BaseModel):
+    date: str # YYYY-MM-DD
+
+@router.post("/gender")
+async def update_gender(request: UpdateGenderRequest, user: User = Depends(verify_token)):
+    try:
+        success = await service.update_gender(user['uid'], request.gender)
+        return {"success": success}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/period")
+async def get_period_data(user: User = Depends(verify_token)):
+    try:
+        data = await service.get_period_data(user['uid'])
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/period")
+async def log_period(request: LogPeriodRequest, user: User = Depends(verify_token)):
+    try:
+        cycle = await service.log_period(user['uid'], request.date)
+        return {"success": True, "data": cycle}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

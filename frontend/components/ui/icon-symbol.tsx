@@ -48,6 +48,7 @@ const MAPPING = {
   "play.tv.fill": "play-circle-filled",
   "arrow.down.left": "call-received",
   "arrow.up.right": "call-made",
+  "person.crop.circle": "account-circle",
   "creditcard.fill": "credit-card",
   "drop.fill": "water-drop",
   minus: "remove",
