@@ -1,4 +1,4 @@
-from services.db import db
+from core.lifespan import db
 import json
 from datetime import datetime, timedelta
 

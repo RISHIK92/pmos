@@ -1,8 +1,8 @@
 from fastapi import UploadFile
-from services.db import db
+from core.lifespan import db
 import os
 from pathlib import Path
-from utils.transcribe import voice_to_text
+from services.transcribe import voice_to_text
 from app.query.schema import QueryRequest
 
 class QueryService:

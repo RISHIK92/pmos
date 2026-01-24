@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Any
-from services.db import db
+from core.lifespan import db
 from common.security import verify_token
 from .schema import MealItemCreate, MealItemUpdate, MealItemResponse
 from . import service

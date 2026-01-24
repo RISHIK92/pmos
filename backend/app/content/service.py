@@ -1,4 +1,4 @@
-from services.db import db
+from core.lifespan import db
 from app.content.schema import ContentItemCreate
 
 class ContentService:

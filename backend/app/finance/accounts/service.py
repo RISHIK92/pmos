@@ -1,4 +1,4 @@
-from services.db import db
+from core.lifespan import db
 from .schema import BankAccountCreate
 
 class AccountsService:

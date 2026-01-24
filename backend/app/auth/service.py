@@ -1,5 +1,5 @@
 from app.auth.schema import RegisterResponse
-from services.db import db
+from core.lifespan import db
 
 class AuthService:
     async def register(self, uid: str, email: str, fcm_token: str = None):

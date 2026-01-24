@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 from app.health.service import HealthService
 from common.security import verify_token
 from prisma.models import User
-from services.db import db
+from core.lifespan import db
 from datetime import datetime, timezone, timedelta
 import json
 

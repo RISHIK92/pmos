@@ -1,5 +1,5 @@
 from app.core.fcm import send_push_notification
-from services.db import db
+from core.lifespan import db
 from app.tasks.schema import SectionCreate, TaskCreate, TaskUpdate
 
 class TasksService:
