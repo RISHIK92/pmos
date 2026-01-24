@@ -1,6 +1,7 @@
-from app.core.fcm import send_push_notification
+from services.notify import schedule_notification
 from core.lifespan import db
 from app.tasks.schema import SectionCreate, TaskCreate, TaskUpdate
+from utils.timestamp_formatter import get_reminder_timestamp
 
 class TasksService:
     async def get_sections(self, uid: str):
@@ -44,20 +45,23 @@ class TasksService:
                 "dueTime": data.dueTime
             }
         )
-        
+
         # Send Notification
         user = await db.user.find_unique(where={"id": uid})
         if user and user.fcmToken:
-             send_push_notification(
-                token=user.fcmToken,
-                title="Task Created",
-                body=f"Created task: {task.title}",
-                data={
-                    "screen": "TaskDetail", 
-                    "taskId": task.id
-                }
+            notification = await schedule_notification(
+                payload={
+                    "tokens": [user.fcmToken],
+                    "title": "Task Due in 1hr",
+                    "body": task.title,
+                    "data": {
+                        "taskId": task.id,
+                        "screen": "TaskDetail"
+                    }
+                },
+                send_at=get_reminder_timestamp(task.dueDate, task.dueTime)
             )
-            
+            print(notification)
         return task
 
     async def update_task(self, task_id: str, data: TaskUpdate, uid: str):

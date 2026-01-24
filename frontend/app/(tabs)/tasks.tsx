@@ -212,7 +212,10 @@ export default function TasksScreen() {
           return;
         }
       }
-
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0"); // Months are 0-indexed
+      const day = String(date.getDate()).padStart(2, "0");
+      const formattedDate = `${year}-${month}-${day}`;
       // 2. Create Task (Only if we have a title)
       if (newTaskText.trim() && targetSectionId) {
         const res = await fetch(`${backendUrl}/tasks/tasks`, {
@@ -226,7 +229,7 @@ export default function TasksScreen() {
             title: newTaskText,
             status: "Pending",
             due: "Soon",
-            dueDate: date.toISOString().split("T")[0], // YYYY-MM-DD
+            dueDate: formattedDate,
             dueTime: date.toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",

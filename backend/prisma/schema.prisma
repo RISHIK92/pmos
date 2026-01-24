@@ -124,6 +124,8 @@ model Task {
   due       String?
   dueDate   String?
   dueTime   String?
+
+  notificationJobId String?
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
