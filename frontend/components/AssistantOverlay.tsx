@@ -1,12 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import AppLauncher from "../utils/AppLauncher";
 import ContactManager from "../utils/ContactManager";
-import { AlarmManager } from "../utils/AlarmManager";
-import SystemManager from "../utils/SystemManager";
-import MediaManager from "../utils/MediaManager";
-import WhatsAppManager from "../utils/WhatsAppManager";
-import SmsManager from "../utils/SmsManager";
-import { SleepManager } from "../utils/SleepManager";
+import { IntentHandler } from "../utils/IntentHandler";
 import {
   View,
   Text,
@@ -36,8 +31,6 @@ import { BlurView } from "expo-blur";
 import { WaveformIcon } from "./ui/WaveformIcon";
 import { Audio } from "expo-av";
 import { CameraView } from "expo-camera";
-//@ts-ignore
-import RNImmediatePhoneCall from "react-native-immediate-phone-call";
 
 const { width } = Dimensions.get("window");
 
@@ -121,7 +114,7 @@ export default function AssistantOverlay() {
 
     const backendUrl =
       Platform.OS === "android"
-        ? "http://10.141.28.129:8000"
+        ? "http://10.243.161.129:8000"
         : "http://localhost:8000";
 
     try {
@@ -146,296 +139,52 @@ export default function AssistantOverlay() {
     }
   };
 
-  const handleMediaAction = async (text: string) => {
-    const lower = text.toLowerCase();
-    // 1. Play [Song]
-    if (lower.startsWith("play")) {
-      const songName = text.substring(4).trim();
-      if (songName) {
-        return MediaManager.playSong(songName);
-      }
-      // If just "play" -> resume
-      return MediaManager.control("play_pause");
-    }
-
-    // 2. Controls
-    if (lower.includes("pause") || lower.includes("stop music"))
-      return MediaManager.control("pause");
-    if (lower.includes("next") || lower.includes("skip"))
-      return MediaManager.control("next");
-    if (lower.includes("prev") || lower.includes("back"))
-      return MediaManager.control("previous");
-
-    return { success: false, message: "Unknown media command." };
-  };
-
-  const handleSystemAction = async (text: string) => {
-    // Local Flashlight Handling (needs state access)
-    if (
-      text.toLowerCase().includes("flash") ||
-      text.toLowerCase().includes("lumos") ||
-      text.toLowerCase().includes("nox")
-    ) {
-      const turnOn =
-        text.toLowerCase().includes("on") ||
-        text.toLowerCase().includes("lumos");
-      const turnOff =
-        text.toLowerCase().includes("off") ||
-        text.toLowerCase().includes("nox");
-
-      if (turnOn) {
-        setIsTorchOn(true);
-        return { success: true, message: "Turning on flashlight..." };
-      }
-      if (turnOff) {
-        setIsTorchOn(false);
-        return { success: true, message: "Turning off flashlight..." };
-      }
-    }
-    return SystemManager.handleAction(text);
-  };
-
   // Central handling for Voice & Text results
   const handleUserIntent = async (text: string) => {
     const cleanText = text.trim();
     if (!cleanText) return;
 
-    console.log("Processing Intent:", cleanText);
+    console.log("Processing Intent via IntentHandler:", cleanText);
 
-    const digitOnly = cleanText.replace(/[^0-9]/g, "");
+    // 1. Delegate to IntentHandler
+    const result = await IntentHandler.process(cleanText);
 
-    const isNumberFormat = /^[\d\s\-\(\)\+]+$/.test(cleanText);
-
-    if (digitOnly.length === 10 && isNumberFormat) {
-      console.log("📞 Direct number detected:", digitOnly);
-      setLastUserQuery(cleanText);
-      setResponse(`Calling ${digitOnly}...`);
-      // Linking.openURL(`tel:${digitOnly}`);
-      RNImmediatePhoneCall.immediatePhoneCall(digitOnly);
-      setTimeout(() => handleDismiss(), 2000);
-      return;
-    }
-
-    // 2. Alarm Check
-    if (cleanText.toLowerCase().includes("alarm")) {
-      console.log("⏰ Alarm command detected");
-      setLastUserQuery(cleanText);
-      setIsProcessingText(true);
-
-      const { success, message, time } =
-        await AlarmManager.parseAndSet(cleanText);
-      setResponse(message);
-      setIsProcessingText(false);
-
-      if (success) {
-        setTimeout(() => handleDismiss(), 2000);
-      }
-      return;
-    }
-
-    // 3. Timer Check
-    if (cleanText.toLowerCase().includes("timer")) {
-      console.log("⏳ Timer command detected");
-      setLastUserQuery(cleanText);
-      setIsProcessingText(true);
-
-      const { success, message } =
-        await AlarmManager.parseAndSetTimer(cleanText);
-      setResponse(message);
-      setIsProcessingText(false);
-
-      if (success) {
-        setTimeout(() => handleDismiss(), 2000);
-      }
-      return;
-    }
-
-    // 4. Media Controls (Play, Pause, Next, Prev)
+    // 2. Handle Specific UI Side Effects (Flashlight)
+    //@ts-ignore
     if (
-      cleanText.toLowerCase().match(/^(play|pause|stop|next|skip|prev|back)/i)
+      result.type === "flashlight_on" ||
+      result.type === "flashlight_off" ||
+      (result.type === "system" &&
+        (result.message.includes("flashlight") ||
+          result.message.includes("torch")))
     ) {
-      const mediaResult = await handleMediaAction(cleanText);
-      if (mediaResult.success) {
-        console.log("🎵 Media command detected");
-        setLastUserQuery(cleanText);
-        setResponse(mediaResult.message);
-        setTimeout(() => handleDismiss(), 2000);
-        return;
-      }
+      // Fallback check on message if type isn't properly drilled from SystemManager
+      // But our IntentHandler explicit check returns specific types for flash
+      if (result.message.includes("on")) setIsTorchOn(true);
+      if (result.message.includes("off")) setIsTorchOn(false);
     }
 
-    // 5. WhatsApp Integration (Auto-Send)
-    // Matches: "Send whatsapp to mom hello world"
-    if (cleanText.toLowerCase().includes("whatsapp")) {
-      const match = cleanText.match(/send whatsapp to (.+?) (.+)/i);
-      if (match) {
-        const contactName = match[1].trim();
-        const messageBody = match[2].trim();
-
-        setLastUserQuery(cleanText);
-        setResponse(`Sending to ${contactName}...`);
-
-        // Resolve contact to phone number
-        const { success, message, phone } =
-          await ContactManager.findContact(contactName); // We likely need to expose a findContact that returns phone
-
-        if (success && phone) {
-          WhatsAppManager.send(phone, messageBody);
-          setTimeout(() => handleDismiss(), 2000);
-        } else {
-          setResponse("Contact not found.");
-        }
-        return;
-      }
-    }
-
-    // 5.5. SMS Integration (Background Send)
-    // Matches: "Send sms to mom hello world" or "text mom hello world"
-    if (
-      cleanText.toLowerCase().includes("sms") ||
-      cleanText.toLowerCase().startsWith("text")
-    ) {
-      const smsMatch = cleanText.match(/(?:send sms to|text) (.+?) (.+)/i);
-      if (smsMatch) {
-        const contactName = smsMatch[1].trim();
-        const messageBody = smsMatch[2].trim();
-
-        setLastUserQuery(cleanText);
-        setResponse(`Sending SMS to ${contactName}...`);
-        setIsProcessingText(true);
-
-        try {
-          // Resolve contact to phone number
-          const { success, message, phone } =
-            await ContactManager.findContact(contactName);
-
-          if (success && phone) {
-            // Send SMS using the native module
-            const result = await SmsManager.send(phone, messageBody);
-            setIsProcessingText(false);
-            setResponse(`SMS sent to ${contactName}!`);
-            setTimeout(() => handleDismiss(), 2000);
-          } else {
-            setIsProcessingText(false);
-            setResponse("Contact not found.");
-          }
-        } catch (error: any) {
-          setIsProcessingText(false);
-          console.error("SMS Error:", error);
-          setResponse(error.message || "Failed to send SMS. Please try again.");
-        }
-        return;
-      }
-    }
-
-    // 6. System Controls (Flashlight, Brightness, Settings)
-    const sysResult = await handleSystemAction(cleanText);
-    if (sysResult.success || sysResult.message !== "Unknown system command.") {
-      if (sysResult.message !== "Unknown system command.") {
-        console.log("⚙️ System command detected");
-        setLastUserQuery(cleanText);
-        setResponse(sysResult.message);
-        // Don't auto-dismiss for toggle actions immediately so user sees feedback,
-        // but for simple toggles we can.
-        setTimeout(() => handleDismiss(), 2000);
-        return;
-      }
-    }
-
-    // 5. Regex Check (Open/Launch/Call/Phone)
-    const match = cleanText.match(/^(open|launch|call|phone)\s+(.+)/i);
-
-    if (match) {
-      const command = match[1].toLowerCase();
-      const targetName = match[2].trim();
-      console.log(`🚀 Command: ${command}, Target: ${targetName}`);
-
+    // 3. Handle Success
+    if (result.success) {
       setLastUserQuery(cleanText);
-      setIsProcessingText(true);
+      setResponse(result.message);
 
-      if (command === "call" || command === "phone") {
-        // Check if target is a number first
-        const targetDigits = targetName.replace(/[^0-9]/g, "");
-        if (
-          targetDigits.length === 10 &&
-          /^[\d\s\-\(\)\+]+$/.test(targetName)
-        ) {
-          setIsProcessingText(false);
-          setResponse(`Calling ${targetDigits}...`);
-          // Linking.openURL(`tel:${targetDigits}`);
-          RNImmediatePhoneCall.immediatePhoneCall(targetDigits);
-          setTimeout(() => handleDismiss(), 2000);
-          return;
-        }
-
-        const { success, message } =
-          await ContactManager.findAndCall(targetName);
-        setResponse(message);
-        setIsProcessingText(false);
-
-        if (success) {
-          setTimeout(() => handleDismiss(), 2000);
-        }
-        return;
-      } else {
-        // App Launch
-        const launched = await AppLauncher.findAndOpen(targetName);
-
-        if (launched) {
-          setIsProcessingText(false);
-          setResponse(`Opening ${targetName}...`);
-          setTimeout(() => handleDismiss(), 2000);
-          return;
-        } else {
-          console.log("⚠️ App not found, blocking fallback");
-          setIsProcessingText(false);
-          setResponse(`App "${targetName}" not found locally.`);
-          return;
-        }
-      }
-    }
-
-    // 7. Sleep Tracking
-    // Matches: "sleeping", "i am sleeping", "going to sleep"
-    if (
-      cleanText.toLowerCase().includes("sleeping") ||
-      cleanText.toLowerCase().includes("going to sleep")
-    ) {
-      console.log("🌙 Sleep command detected");
-      setLastUserQuery(cleanText);
-      setIsProcessingText(true);
-
-      const { success, message } = await SleepManager.startSleep();
-      setResponse(message);
-      setIsProcessingText(false);
-
-      if (success) {
+      // Special case: If it was a system toggle, we might not want to dismiss immediately?
+      // But IntentHandler says 'shouldDismiss'.
+      if (result.shouldDismiss) {
         setTimeout(() => handleDismiss(), 2000);
       }
       return;
     }
 
-    // Matches: "woke up", "i'm awake", "i am awake"
-    if (
-      cleanText.toLowerCase().includes("woke up") ||
-      cleanText.toLowerCase().includes("awake")
-    ) {
-      console.log("☀️ Wake up command detected");
+    // 4. AI Fallback (if type is 'ai' or just failed specific handlers)
+    if (result.type === "ai") {
+      processQuery(cleanText);
+    } else {
+      // Failed but not AI (e.g. contact not found), show error
       setLastUserQuery(cleanText);
-      setIsProcessingText(true);
-
-      const { success, message } = await SleepManager.wakeUp();
-      setResponse(message);
-      setIsProcessingText(false);
-
-      if (success) {
-        setTimeout(() => handleDismiss(), 2000);
-      }
-      return;
+      setResponse(result.message || "Command failed.");
     }
-
-    // 3. AI Fallback
-    processQuery(cleanText);
   };
 
   const handleTextSubmit = async () => {
@@ -560,7 +309,7 @@ export default function AssistantOverlay() {
 
         const backendUrl =
           Platform.OS === "android"
-            ? "http://10.141.28.129:8000"
+            ? "http://10.243.161.129:8000"
             : "http://localhost:8000";
 
         try {

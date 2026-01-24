@@ -33,6 +33,7 @@ import Animated, {
 import { Audio } from "expo-av";
 import { shareAsync } from "expo-sharing";
 import { WaveformIcon } from "@/components/ui/WaveformIcon";
+import { FCMManager } from "../../utils/FCMManager";
 
 const { width } = Dimensions.get("window");
 
@@ -100,10 +101,19 @@ export default function ChatScreen() {
 
       if (firebaseUser) {
         try {
+          // 1. Get Auth Token
           const token = await firebaseUser.getIdToken();
+
+          // 2. Get FCM Token (Request permission if needed)
+          const hasPermission = await FCMManager.requestPermission();
+          let fcmToken = null;
+          if (hasPermission) {
+            fcmToken = await FCMManager.getToken();
+          }
+
           const backendUrl =
             Platform.OS === "android"
-              ? "http://10.141.28.129:8000"
+              ? "http://10.243.161.129:8000"
               : "http://localhost:8000";
 
           const data = await fetch(`${backendUrl}/auth/register`, {
@@ -112,9 +122,9 @@ export default function ChatScreen() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({}),
+            body: JSON.stringify({ fcmToken }), // Pass FCM Token here
           });
-          console.log(data);
+          console.log("Auth Sync:", await data.json());
         } catch (err) {
           console.error("Backend sync failed", err);
         }
@@ -139,7 +149,7 @@ export default function ChatScreen() {
         });
 
         const { recording } = await Audio.Recording.createAsync(
-          Audio.RecordingOptionsPresets.HIGH_QUALITY
+          Audio.RecordingOptionsPresets.HIGH_QUALITY,
         );
 
         setRecording(recording);
@@ -156,7 +166,7 @@ export default function ChatScreen() {
               text: "Open Settings",
               onPress: () => Linking.openSettings(),
             },
-          ]
+          ],
         );
       }
     } catch (err) {
@@ -181,7 +191,7 @@ export default function ChatScreen() {
         processingScale.value = withRepeat(
           withSpring(1.4, { duration: 600 }),
           -1,
-          true
+          true,
         );
 
         const formData = new FormData();
@@ -194,7 +204,7 @@ export default function ChatScreen() {
 
         const backendUrl =
           Platform.OS === "android"
-            ? "http://10.141.28.129:8000"
+            ? "http://10.243.161.129:8000"
             : "http://localhost:8000";
 
         const response = await fetch(`${backendUrl}/query/voice`, {
@@ -246,7 +256,7 @@ export default function ChatScreen() {
       const token = await user.getIdToken();
       const backendUrl =
         Platform.OS === "android"
-          ? "http://10.141.28.129:8000"
+          ? "http://10.243.161.129:8000"
           : "http://localhost:8000";
 
       const apiResponse = await fetch(`${backendUrl}/query/text`, {
@@ -532,10 +542,10 @@ export default function ChatScreen() {
                     isProcessingVoice
                       ? "hourglass"
                       : inputText.length > 0
-                      ? "arrow.up.right"
-                      : isRecording
-                      ? "checkmark"
-                      : "mic.fill"
+                        ? "arrow.up.right"
+                        : isRecording
+                          ? "checkmark"
+                          : "mic.fill"
                   }
                   size={18}
                   color={

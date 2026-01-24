@@ -9,7 +9,7 @@ const { HealthModule } = NativeModules;
 const STEPS_OFFSET_KEY = "PMOS_STEPS_OFFSET";
 const LAST_DATE_KEY = "PMOS_LAST_STEP_DATE";
 const HOURLY_LOG_KEY = "PMOS_HOURLY_LOG";
-const BACKEND_URL = "http://10.141.28.129:8000";
+const BACKEND_URL = "http://10.243.161.129:8000";
 
 export const HealthManager = {
   /**

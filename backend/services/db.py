@@ -1,8 +1,11 @@
+import os
 from contextlib import asynccontextmanager
 from prisma import Prisma
+from redis.asyncio import Redis
 from .firebase import initialize_firebase
 
 db = Prisma()
+redis = Redis(host=os.getenv("REDIS_HOST", "localhost"), port=int(os.getenv("REDIS_PORT", 6379)), db=0, password=os.getenv("REDIS_PASSWORD"), decode_responses=True)
 
 @asynccontextmanager
 async def lifespan(app):
@@ -12,6 +15,9 @@ async def lifespan(app):
     """
     await db.connect()
     print("✅ Database connected")
+
+    await redis.ping()
+    print("✅ Redis connected")
     
     initialize_firebase()
     
@@ -20,4 +26,7 @@ async def lifespan(app):
     await db.disconnect()
     print("❌ Database disconnected")
 
-__all__ = ["db", "lifespan"]
+    await redis.close()
+    print("❌ Redis disconnected")
+
+__all__ = ["db", "lifespan", "redis"]

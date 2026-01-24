@@ -70,7 +70,7 @@ export default function TasksScreen() {
 
   const backendUrl =
     Platform.OS === "android"
-      ? "http://10.141.28.129:8000"
+      ? "http://10.243.161.129:8000"
       : "http://localhost:8000";
 
   const fetchSections = async () => {
@@ -111,10 +111,10 @@ export default function TasksScreen() {
           tasks: sec.tasks.map((t: any) =>
             t.id === taskId
               ? { ...t, status: t.status === "Done" ? "Pending" : "Done" }
-              : t
+              : t,
           ),
         };
-      })
+      }),
     );
 
     try {
@@ -149,7 +149,7 @@ export default function TasksScreen() {
           ...sec,
           tasks: sec.tasks.filter((t: any) => t.id !== taskId),
         };
-      })
+      }),
     );
 
     try {

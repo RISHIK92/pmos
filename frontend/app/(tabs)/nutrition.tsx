@@ -54,7 +54,7 @@ export default function NutritionScreen() {
 
   const backendUrl =
     Platform.OS === "android"
-      ? "http://10.141.28.129:8000"
+      ? "http://10.243.161.129:8000"
       : "http://localhost:8000";
 
   useEffect(() => {

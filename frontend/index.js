@@ -57,7 +57,7 @@ const SmsHeadlessTask = async (taskData) => {
       return;
     }
 
-    const backendUrl = "http://10.141.28.129:8000"; // Hardcoded for now based on context
+    const backendUrl = "http://10.243.161.129:8000"; // Hardcoded for now based on context
     const response = await fetch(`${backendUrl}/finance/parse-sms`, {
       method: "POST",
       headers: {

@@ -15,6 +15,7 @@ from app.content.router import router as content_router
 from app.focus.router import router as focus_router
 from app.nutrition.router import router as nutrition_router
 from app.health.router import router as health_router
+import app.core.fcm
 
 app = FastAPI(lifespan=lifespan)
 

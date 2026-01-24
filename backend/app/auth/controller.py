@@ -4,6 +4,6 @@ from app.auth.service import AuthService
 service = AuthService()
 
 class AuthController:
-    async def register(self, userData: dict):
-        registerUser = await service.register(uid= userData['uid'], email= userData['email'])
+    async def register(self, userData: dict, fcm_token: str = None):
+        registerUser = await service.register(uid= userData['uid'], email= userData['email'], fcm_token=fcm_token)
         return registerUser

@@ -133,7 +133,7 @@ export default function RestrictorScreen() {
 
   const backendUrl =
     Platform.OS === "android"
-      ? "http://10.141.28.129:8000"
+      ? "http://10.243.161.129:8000"
       : "http://localhost:8000";
 
   const fetchHistory = async () => {
@@ -169,8 +169,8 @@ export default function RestrictorScreen() {
   const toggleApp = (id: string) => {
     setApps(
       apps.map((app) =>
-        app.id === id ? { ...app, isBlocked: !app.isBlocked } : app
-      )
+        app.id === id ? { ...app, isBlocked: !app.isBlocked } : app,
+      ),
     );
   };
 
@@ -179,7 +179,7 @@ export default function RestrictorScreen() {
     if (isNaN(minutes) || minutes <= 0) {
       Alert.alert(
         "Invalid Duration",
-        "Please enter a valid number of minutes."
+        "Please enter a valid number of minutes.",
       );
       return;
     }

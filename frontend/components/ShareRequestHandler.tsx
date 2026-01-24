@@ -52,7 +52,7 @@ export default function ShareRequestHandler() {
 
   const backendUrl =
     Platform.OS === "android"
-      ? "http://10.141.28.129:8000"
+      ? "http://10.243.161.129:8000"
       : "http://localhost:8000";
 
   useEffect(() => {
@@ -78,7 +78,7 @@ export default function ShareRequestHandler() {
 
             // Helper to extract platform from URL
             const getPlatformFromUrl = (
-              url: string
+              url: string,
             ): { platform: string; isSocial: boolean; isVideo: boolean } => {
               const lowerUrl = url.toLowerCase();
               if (lowerUrl.includes("twitter") || lowerUrl.includes("x.com"))

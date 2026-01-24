@@ -4,7 +4,7 @@ from common.security import verify_token
 from app.finance.controller import FinanceController
 from app.finance.schema import TransactionCreate, TransactionResponse, PendingTransactionCreate, PendingTransactionResponse, TransactionUpdate
 from typing import List, Optional
-from services.sms_parser import parse_sms_with_groq
+from utils.sms_parser import parse_sms_with_groq
 from services.db import db
 
 router = APIRouter(prefix="/finance")

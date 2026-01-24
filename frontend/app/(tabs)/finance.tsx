@@ -170,7 +170,7 @@ const AnimatedDot = ({
       scrollX.value,
       [center - segment, center, center + segment],
       [0.3, 1, 0.3],
-      Extrapolation.CLAMP
+      Extrapolation.CLAMP,
     );
 
     return { opacity };
@@ -202,7 +202,7 @@ export default function FinanceScreen() {
 
   const backendUrl =
     Platform.OS === "android"
-      ? "http://10.141.28.129:8000"
+      ? "http://10.243.161.129:8000"
       : "http://localhost:8000";
 
   const fetchTransactions = async () => {
@@ -345,7 +345,7 @@ export default function FinanceScreen() {
             payee: editPayee,
             category: editCategory,
           }),
-        }
+        },
       );
 
       if (res.ok) {
@@ -395,7 +395,7 @@ export default function FinanceScreen() {
             balance: initialBalToStore,
             color: editAccColor,
           }),
-        }
+        },
       );
 
       if (res.ok) {
@@ -435,11 +435,11 @@ export default function FinanceScreen() {
 
   const visibleData = useMemo(
     () => transactions.slice(0, visibleCount),
-    [visibleCount, transactions]
+    [visibleCount, transactions],
   );
   const groupedSections = useMemo(
     () => groupTransactions(visibleData),
-    [visibleData]
+    [visibleData],
   );
 
   // Calculate number of dots based on logic
@@ -449,7 +449,7 @@ export default function FinanceScreen() {
       pendingList.length < 2
         ? 0
         : Math.min(6, Math.ceil(pendingList.length / 2)),
-    [pendingList.length]
+    [pendingList.length],
   );
 
   const handleLoadMore = () => {
@@ -531,8 +531,8 @@ export default function FinanceScreen() {
           item.actionLabel === "Bills"
             ? "doc.text.fill"
             : item.type === "income"
-            ? "arrow.down.left"
-            : "paperplane.fill",
+              ? "arrow.down.left"
+              : "paperplane.fill",
         iconBg: item.type === "income" ? "#00B894" : "#2D3436",
       };
 
@@ -655,7 +655,7 @@ export default function FinanceScreen() {
                   onPress={() => {
                     if (hiddenAccountIds.includes(acc.id)) {
                       setHiddenAccountIds((prev) =>
-                        prev.filter((id) => id !== acc.id)
+                        prev.filter((id) => id !== acc.id),
                       );
                     } else {
                       setHiddenAccountIds((prev) => [...prev, acc.id]);

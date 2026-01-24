@@ -1,3 +1,4 @@
+from app.core.fcm import send_push_notification
 from services.db import db
 from app.tasks.schema import SectionCreate, TaskCreate, TaskUpdate
 
@@ -33,7 +34,7 @@ class TasksService:
         if not section:
             return None
 
-        return await db.task.create(
+        task = await db.task.create(
             data={
                 "sectionId": data.sectionId,
                 "title": data.title,
@@ -43,6 +44,21 @@ class TasksService:
                 "dueTime": data.dueTime
             }
         )
+        
+        # Send Notification
+        user = await db.user.find_unique(where={"id": uid})
+        if user and user.fcmToken:
+             send_push_notification(
+                token=user.fcmToken,
+                title="Task Created",
+                body=f"Created task: {task.title}",
+                data={
+                    "screen": "TaskDetail", 
+                    "taskId": task.id
+                }
+            )
+            
+        return task
 
     async def update_task(self, task_id: str, data: TaskUpdate, uid: str):
         # Verify ownership via section

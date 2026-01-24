@@ -175,7 +175,7 @@ export default function ContentScreen() {
 
   const backendUrl =
     Platform.OS === "android"
-      ? "http://10.141.28.129:8000"
+      ? "http://10.243.161.129:8000"
       : "http://localhost:8000";
 
   const fetchContent = async () => {
@@ -214,8 +214,8 @@ export default function ContentScreen() {
             platformKeywords.some(
               (k) =>
                 (c.platform || "").toLowerCase().includes(k) ||
-                (c.url || "").toLowerCase().includes(k)
-            )
+                (c.url || "").toLowerCase().includes(k),
+            ),
           );
 
           return {
@@ -253,7 +253,7 @@ export default function ContentScreen() {
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [newItemType, setNewItemType] = useState<"watch" | "read" | "social">(
-    "read"
+    "read",
   ); // Added social
   const [newTitle, setNewTitle] = useState("");
   const [newSubtitle, setNewSubtitle] = useState(""); // Used for Platform (Watch) or Source/URL (Read)
@@ -297,7 +297,7 @@ export default function ContentScreen() {
   };
 
   const getPlatformFromUrl = (
-    url: string
+    url: string,
   ): { platform: string; isSocial: boolean } => {
     const lowerUrl = url.toLowerCase();
 
@@ -372,8 +372,8 @@ export default function ContentScreen() {
           finalType === "watch"
             ? "To Watch"
             : finalType === "social"
-            ? finalPlatform
-            : finalPlatform, // For social/read, subtitle is source/platform
+              ? finalPlatform
+              : finalPlatform, // For social/read, subtitle is source/platform
         platform: finalPlatform,
         url: newSubtitle.startsWith("http")
           ? newSubtitle

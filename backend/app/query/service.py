@@ -2,7 +2,7 @@ from fastapi import UploadFile
 from services.db import db
 import os
 from pathlib import Path
-from services.transcribe import voice_to_text
+from utils.transcribe import voice_to_text
 from app.query.schema import QueryRequest
 
 class QueryService:
