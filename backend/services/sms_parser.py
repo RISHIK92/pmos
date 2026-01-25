@@ -1,283 +1,95 @@
 import os
-import json
-from groq import AsyncGroq
-from typing import Optional
-import re
+from typing import Optional, List, Literal
+from pydantic import BaseModel, Field
+from langchain_groq import ChatGroq
+from langchain_core.prompts import ChatPromptTemplate
 
-client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
+class SMSExtraction(BaseModel):
+    """Schema for extracting financial transaction details from SMS."""
+    is_transaction: bool = Field(
+        description="Set to False if this is an OTP, promo, or balance inquiry. True only for actual money movement."
+    )
+    amount: float = Field(
+        default=0.0, 
+        description="The numeric amount of the transaction. No currency symbols."
+    )
+    type: Literal["debit", "credit"] = Field(
+        default="debit", 
+        description="'debit' for spent/paid/sent, 'credit' for received/refunds"
+    )
+    merchant: str = Field(
+        default="Unknown",
+        description="The name of the entity, person, or shop the money was sent to or received from."
+    )
+    account_last_4: str = Field(
+        default="0000",
+        description="The 4 digits representing the bank account found in the text."
+    )
+    category: Literal["Food", "Shopping", "Transport", "Bills", "Entertainment", "Health", "Transfer", "Salary", "Other"] = Field(
+        default="Other",
+        description="Categorize the transaction based on the merchant."
+    )
 
-PARSE_SMS_PROMPT = """
-You are a financial SMS parser. Extract transaction details from the following bank SMS.
+llm = ChatGroq(
+    model="llama-3.3-70b-versatile",
+    api_key=os.getenv("GROQ_API_KEY"),
+    temperature=0.0,
+    max_retries=2,
+)
 
-SMS Content:
-"{sms_body}"
+structured_llm = llm.with_structured_output(SMSExtraction)
 
-User's registered account numbers (last 4 digits): {account_numbers}
+prompt_template = ChatPromptTemplate.from_messages([
+    ("system", """You are an expert financial parser. 
+    Analyze the incoming SMS against the user's known accounts: {account_numbers}.
+    
+    If the SMS mentions an account number NOT in the list, extract it anyway.
+    Focus on accuracy for the 'amount' and 'merchant' fields.
+    """),
+    ("human", "{sms_body}"),
+])
 
-INSTRUCTIONS:
-1. If this is NOT a financial transaction SMS (e.g., OTP, promotional, balance inquiry), return: {{"is_transaction": false}}
-2. If this IS a transaction, extract and return:
+# 5. Create the Chain
+chain = prompt_template | structured_llm
 
-{{
-  "is_transaction": true,
-  "amount": 0.00,
-  "type": "debit",
-  "merchant": "Unknown",
-  "account_last_4": "0000",
-  "category": "Other"
-}}
-
-Replace values with actual data from SMS.
-
-RULES:
-- "debited", "spent", "paid", "sent" → type: "debit"
-- "credited", "received", "refund" → type: "credit"
-- amount must be a number (no currency symbols)
-- account_last_4 must be exactly 4 digits from the SMS
-- merchant must be the name of the person amount recieved or sent to and dont leave it unknown
-- category options: Food, Shopping, Transport, Bills, Entertainment, Health, Transfer, Salary, Other
-- Return ONLY valid JSON, no markdown blocks, no explanations, no extra text
-"""
-
-async def parse_sms_with_groq(
-    sms_body: str,
-    user_accounts: list
+async def parse_sms(
+    sms_body: str, 
+    user_accounts: List[dict]
 ) -> Optional[dict]:
     
     try:
-        # Build account numbers string for the prompt
-        account_numbers_str = ", ".join([acc.get("accountNumber", "") for acc in user_accounts])
-        if not account_numbers_str:
-            account_numbers_str = "None registered"
-        
-        # Build account lookup map
         account_map = {acc.get("accountNumber"): acc.get("id") for acc in user_accounts}
-        
-        prompt = PARSE_SMS_PROMPT.format(
-            sms_body=sms_body,
-            account_numbers=account_numbers_str
-        )
-        
-        completion = await client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.1,
-            response_format={"type": "json_object"}
-        )
-        
-        raw_text = completion.choices[0].message.content.strip()
-        print(f"Groq raw response: {raw_text}")  # Full debug log
-        
-        # Aggressive cleanup
-        # Remove markdown code blocks
-        raw_text = re.sub(r'```(?:json)?', '', raw_text)
-        raw_text = raw_text.strip()
-        
-        # Remove any text before/after JSON object (just in case)
-        json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-        if json_match:
-            raw_text = json_match.group(0)
-        
-        # Parse JSON
-        data = json.loads(raw_text)
-        
-        # Check if it's a transaction
-        is_transaction = data.get("is_transaction", False)
-        
-        if not is_transaction:
-            print(f"SMS marked as not a transaction by Groq")
+        account_numbers_str = ", ".join(account_map.keys()) or "None registered"
+
+        result: SMSExtraction = await chain.ainvoke({
+            "sms_body": sms_body,
+            "account_numbers": account_numbers_str
+        })
+
+        if not result.is_transaction:
+            print(f"Skipping: marked as non-transaction.")
             return None
-        
-        # Try to match account
-        account_last_4 = str(data.get("account_last_4", "")).strip()
+
         matched_account_id = None
-        
-        if account_last_4:
-            # Try exact match first
-            if account_last_4 in account_map:
-                matched_account_id = account_map[account_last_4]
-            else:
-                # Try to find partial match (in case AI extracted more than last 4)
-                for acc_num, acc_id in account_map.items():
-                    if acc_num.endswith(account_last_4) or account_last_4.endswith(acc_num):
-                        matched_account_id = acc_id
-                        break
-        
-        # Get amount
-        try:
-            amount = float(data.get("amount", 0))
-        except (ValueError, TypeError):
-            # Try to extract number from string
-            amount_str = str(data.get("amount", "0"))
-            amount_match = re.search(r'[\d,]+\.?\d*', amount_str.replace(',', ''))
-            amount = float(amount_match.group(0)) if amount_match else 0.0
-        
-        result = {
-            "amount": amount,
-            "type": "expense" if data.get("type") == "debit" else "income",
-            "merchant": data.get("merchant", "Unknown").strip(),
-            "category": data.get("category", "Other").strip(),
+        extracted_acc = result.account_last_4.strip()
+
+        if extracted_acc in account_map:
+            matched_account_id = account_map[extracted_acc]
+        else:
+            for acc_num, acc_id in account_map.items():
+                if acc_num.endswith(extracted_acc) or extracted_acc.endswith(acc_num):
+                    matched_account_id = acc_id
+                    break
+
+        return {
+            "amount": result.amount,
+            "type": "expense" if result.type == "debit" else "income",
+            "merchant": result.merchant,
+            "category": result.category,
             "account_id": matched_account_id,
-            "account_last_4": account_last_4
+            "account_last_4": extracted_acc
         }
-        
-        print(f"Groq parsed result: {result}")
-        return result
-        
-    except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e}")
-        print(f"Raw text: {raw_text if 'raw_text' in locals() else 'N/A'}")
-        return None
+
     except Exception as e:
-        print(f"Groq SMS parsing error: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-PARSE_SMS_PROMPT = """
-You are a financial SMS parser. Extract transaction details from the following bank SMS.
-
-SMS Content:
-"{sms_body}"
-
-User's registered account numbers (last 4 digits): {account_numbers}
-
-INSTRUCTIONS:
-1. If this is NOT a financial transaction SMS (e.g., OTP, promotional, balance inquiry), return: {{"is_transaction": false}}
-2. If this IS a transaction, extract and return:
-
-{{
-  "is_transaction": true,
-  "amount": 0.00,
-  "type": "debit",
-  "merchant": "Unknown",
-  "account_last_4": "0000",
-  "category": "Other"
-}}
-
-Replace values with actual data from SMS.
-
-RULES:
-- "debited", "spent", "paid", "sent" → type: "debit"
-- "credited", "received", "refund" → type: "credit"
-- amount must be a number (no currency symbols)
-- account_last_4 must be exactly 4 digits from the SMS
-- merchant must be the name of the person amount recieved or sent to and dont leave it unknown
-- category options: Food, Shopping, Transport, Bills, Entertainment, Health, Transfer, Salary, Other
-- Return ONLY valid JSON, no markdown blocks, no explanations, no extra text
-"""
-
-async def parse_sms_with_gemini(
-    sms_body: str,
-    user_accounts: list
-) -> Optional[dict]:
-    
-    try:
-        # Build account numbers string for the prompt
-        account_numbers_str = ", ".join([acc.get("accountNumber", "") for acc in user_accounts])
-        if not account_numbers_str:
-            account_numbers_str = "None registered"
-        
-        # Build account lookup map
-        account_map = {acc.get("accountNumber"): acc.get("id") for acc in user_accounts}
-        
-        prompt = PARSE_SMS_PROMPT.format(
-            sms_body=sms_body,
-            account_numbers=account_numbers_str
-        )
-        
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config={
-                "temperature": 0.1,  # More deterministic
-                "response_mime_type": "application/json"  # Force JSON response
-            }
-        )
-        
-        raw_text = response.text.strip()
-        print(f"Gemini raw response: {raw_text}")  # Full debug log
-        
-        # Aggressive cleanup
-        # Remove markdown code blocks
-        raw_text = re.sub(r'```(?:json)?', '', raw_text)
-        raw_text = raw_text.strip()
-        
-        # Remove any text before/after JSON object
-        json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-        if json_match:
-            raw_text = json_match.group(0)
-        
-        # Fix common JSON issues
-        # Replace single quotes with double quotes (if present)
-        raw_text = raw_text.replace("'", '"')
-        
-        # Remove trailing commas before closing braces/brackets
-        raw_text = re.sub(r',(\s*[}\]])', r'\1', raw_text)
-        
-        print(f"Cleaned JSON: {raw_text}")
-        
-        # Parse JSON
-        data = json.loads(raw_text)
-        
-        # Check if it's a transaction
-        is_transaction = data.get("is_transaction", False)
-        
-        if not is_transaction:
-            print(f"SMS marked as not a transaction by Gemini")
-            return None
-        
-        # Try to match account
-        account_last_4 = str(data.get("account_last_4", "")).strip()
-        matched_account_id = None
-        
-        if account_last_4:
-            # Try exact match first
-            if account_last_4 in account_map:
-                matched_account_id = account_map[account_last_4]
-            else:
-                # Try to find partial match (in case Gemini extracted more than last 4)
-                for acc_num, acc_id in account_map.items():
-                    if acc_num.endswith(account_last_4) or account_last_4.endswith(acc_num):
-                        matched_account_id = acc_id
-                        break
-        
-        # Get amount
-        try:
-            amount = float(data.get("amount", 0))
-        except (ValueError, TypeError):
-            # Try to extract number from string
-            amount_str = str(data.get("amount", "0"))
-            amount_match = re.search(r'[\d,]+\.?\d*', amount_str.replace(',', ''))
-            amount = float(amount_match.group(0)) if amount_match else 0.0
-        
-        result = {
-            "amount": amount,
-            "type": "expense" if data.get("type") == "debit" else "income",
-            "merchant": data.get("merchant", "Unknown").strip(),
-            "category": data.get("category", "Other").strip(),
-            "account_id": matched_account_id,
-            "account_last_4": account_last_4
-        }
-        
-        print(f"Gemini parsed result: {result}")
-        return result
-        
-    except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e}")
-        print(f"Raw text: {raw_text if 'raw_text' in locals() else 'N/A'}")
-        return None
-    except KeyError as e:
-        print(f"Missing key in response: {e}")
-        print(f"Data received: {data if 'data' in locals() else 'N/A'}")
-        return None
-    except Exception as e:
-        print(f"Gemini SMS parsing error: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"LangChain Extraction Error: {e}")
         return None

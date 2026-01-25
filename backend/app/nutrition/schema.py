@@ -2,6 +2,9 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
+class MealAnalyzeRequest(BaseModel):
+    image: str
+
 class MealItemBase(BaseModel):
     name: str
     kcal: int
@@ -30,8 +33,11 @@ class DailyLogBase(BaseModel):
     goal: int
 
 class DailyLogResponse(DailyLogBase):
-    id: str
-    userId: str
+    id: Optional[str] = None
+    userId: Optional[str] = None
+    day: str
+    displayDate: str
+    fullDate: datetime
     meals: List[MealItemResponse]
 
     class Config:

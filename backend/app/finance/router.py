@@ -4,7 +4,7 @@ from common.security import verify_token
 from app.finance.controller import FinanceController
 from app.finance.schema import TransactionCreate, TransactionResponse, PendingTransactionCreate, PendingTransactionResponse, TransactionUpdate
 from typing import List, Optional
-from services.sms_parser import parse_sms_with_groq
+from services.sms_parser import parse_sms as parse_sms_service
 from core.lifespan import db
 
 router = APIRouter(prefix="/finance")
@@ -93,7 +93,7 @@ async def parse_sms(request: ParseSmsRequest, user_data: dict = Depends(verify_t
             message=f"No matching account found. SMS accounts: {found_acc_numbers}, User accounts: {list(user_account_numbers)}"
         )
     
-    parsed = await parse_sms_with_groq(request.body, account_list)
+    parsed = await parse_sms_service(request.body, account_list)
     
     if not parsed:
         return ParseSmsResponse(success=False, transaction=None, message="Not a valid transaction SMS")

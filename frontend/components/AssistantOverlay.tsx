@@ -36,7 +36,7 @@ const { width } = Dimensions.get("window");
 
 // --- Noise Gate Thresholds ---
 const MIN_DURATION = 1200; // 1.2 second minimum
-const MIN_VOLUME = -20; // dB threshold (below this is background noise)
+const MIN_VOLUME = -30; // dB threshold (below this is background noise)
 const INITIAL_SILENCE_TIMEOUT = 4000; // 4 seconds before user speaks
 const SPEECH_SILENCE_TIMEOUT = 1500; // 1.5 seconds after user started speaking
 
@@ -148,21 +148,6 @@ export default function AssistantOverlay() {
 
     // 1. Delegate to IntentHandler
     const result = await IntentHandler.process(cleanText);
-
-    // 2. Handle Specific UI Side Effects (Flashlight)
-    //@ts-ignore
-    if (
-      result.type === "flashlight_on" ||
-      result.type === "flashlight_off" ||
-      (result.type === "system" &&
-        (result.message.includes("flashlight") ||
-          result.message.includes("torch")))
-    ) {
-      // Fallback check on message if type isn't properly drilled from SystemManager
-      // But our IntentHandler explicit check returns specific types for flash
-      if (result.message.includes("on")) setIsTorchOn(true);
-      if (result.message.includes("off")) setIsTorchOn(false);
-    }
 
     // 3. Handle Success
     if (result.success) {

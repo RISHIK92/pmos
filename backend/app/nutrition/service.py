@@ -62,6 +62,7 @@ async def get_weekly_logs(user_id: str, db: Prisma) -> List[Dict[str, Any]]:
             # Empty filler
             result.append({
                 "id": None, # No DB entry yet
+                "userId": user_id,
                 "date": date_str,
                 "day": day_char,
                 "displayDate": str(d.day),

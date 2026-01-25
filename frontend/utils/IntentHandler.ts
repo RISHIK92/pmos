@@ -166,20 +166,6 @@ export const IntentHandler = {
       }
     }
 
-    // 7. System Controls
-    const sysResult = await IntentHandler.handleSystemAction(cleanText);
-    if (sysResult.success || sysResult.message !== "Unknown system command.") {
-      if (sysResult.message !== "Unknown system command.") {
-        console.log("⚙️ System command detected");
-        return {
-          success: true, // Mark as success if handled, even if it's just a message
-          message: sysResult.message,
-          shouldDismiss: true, // Usually dismiss after system action
-          type: "system",
-        };
-      }
-    }
-
     // 8. Open/Launch/Call/Phone
     const match = cleanText.match(/^(open|launch|call|phone)\s+(.+)/i);
     if (match) {
@@ -292,55 +278,5 @@ export const IntentHandler = {
       return MediaManager.control("previous");
 
     return { success: false, message: "Unknown media command." };
-  },
-
-  handleSystemAction: async (text: string) => {
-    // Note: Flashlight handling in AssistantOverlay uses React State (setIsTorchOn).
-    // IntentHandler runs outside component, so we can't set state directly.
-    // However, if we move Camera/Flashlight state management to SystemManager or a global store, it would work.
-    // For now, allow AssistantOverlay to handle "flash" separately OR
-    // we return a special result type for flashlight so UI can react.
-    // Let's return a specific message/type for flashlight that AssistantOverlay can observe?
-    // Actually, looking at the code, `SystemManager` handles brightness/dnd.
-    // `AssistantOverlay` handled Flash specifically.
-    // Let's just handle it here by returning a custom success message that UI can parse?
-    // OR BETTER: We can't easily set the state `setIsTorchOn` from here.
-    // But `SystemManager` could potentially handle it if we passed the callback?
-    // SIMPLIFICATION: We will keep flashlight logic here but we need to return a signal.
-
-    if (
-      text.toLowerCase().includes("flash") ||
-      text.toLowerCase().includes("lumos") ||
-      text.toLowerCase().includes("nox")
-    ) {
-      const turnOn =
-        text.toLowerCase().includes("on") ||
-        text.toLowerCase().includes("lumos");
-      const turnOff =
-        text.toLowerCase().includes("off") ||
-        text.toLowerCase().includes("nox");
-
-      if (turnOn) {
-        // We can't actually turn it on here since it's a UI prop in Overlay...
-        // But we can trigger a "success" and let the UI inspect the type/message?
-        // Or we ask the user to move Flashlight logic to SystemManager entirely (requires native module update?)
-        // The current impl uses <CameraView enableTorch={state} /> in UI.
-        // So we MUST signal the UI.
-        return {
-          success: true,
-          message: "Turning on flashlight...",
-          type: "flashlight_on",
-        };
-      }
-      if (turnOff) {
-        return {
-          success: true,
-          message: "Turning off flashlight...",
-          type: "flashlight_off",
-        };
-      }
-    }
-
-    return SystemManager.handleAction(text);
   },
 };

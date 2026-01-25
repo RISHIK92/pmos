@@ -2,12 +2,31 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Any
 from core.lifespan import db
 from common.security import verify_token
-from .schema import MealItemCreate, MealItemUpdate, MealItemResponse
-from . import service
+from app.nutrition.schema import (
+    DailyLogResponse,
+    MealItemCreate,
+    MealItemResponse,
+    MealItemUpdate,
+    MealAnalyzeRequest
+)
+from app.nutrition import service
+from services.food_analyzer import analyze_food_image
+from types import SimpleNamespace
 
 router = APIRouter(prefix="/nutrition", tags=["Nutrition"])
 
-@router.get("/history")
+@router.post("/analyze")
+async def analyze_meal(request: MealAnalyzeRequest):
+    if not request.image:
+        raise HTTPException(status_code=400, detail="Image required")
+
+    result = await analyze_food_image(request.image)
+    if not result:
+        raise HTTPException(status_code=500, detail="Failed to analyze image")
+
+    return result
+
+@router.get("/history", response_model=List[DailyLogResponse])
 async def get_history(user: dict = Depends(verify_token)):
     # Returns last 7 days logs
     return await service.get_weekly_logs(user["uid"], db)

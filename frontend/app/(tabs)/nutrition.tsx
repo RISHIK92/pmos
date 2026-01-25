@@ -12,12 +12,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { SidebarContext } from "./_layout";
 import { auth } from "../../lib/firebase";
+import * as ImagePicker from "expo-image-picker";
+import { Image } from "react-native";
 
 // Types
 type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snack";
@@ -51,6 +54,62 @@ export default function NutritionScreen() {
     useState<MealType>("Breakfast");
   const [activeMenuItemId, setActiveMenuItemId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<MealItem | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      alert("Sorry, we need camera permissions to make this work!");
+      return;
+    }
+
+    let result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const base64Img = "data:image/jpeg;base64," + result.assets[0].base64;
+      setSelectedImage(base64Img);
+
+      // Auto Analyze
+      analyzeImage(base64Img);
+    }
+  };
+
+  const analyzeImage = async (imgData: string) => {
+    try {
+      setAnalyzing(true);
+      // Assuming we are logged in, but analyze endpoint might be open or protected.
+      // Let's use the token if available.
+      const user = auth.currentUser;
+      const token = user ? await user.getIdToken() : "";
+
+      const res = await fetch(`${backendUrl}/nutrition/analyze`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ image: imgData }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setNewMealName(data.name);
+        setNewMealKcal(data.kcal.toString());
+      }
+    } catch (e) {
+      console.error("Analysis failed", e);
+      // Fallback or alert? Silent fail is safer for now.
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   const backendUrl =
     Platform.OS === "android"
@@ -198,6 +257,7 @@ export default function NutritionScreen() {
     setNewMealName("");
     setNewMealKcal("");
     setEditingItem(null);
+    setSelectedImage(null);
     setShowAddModal(false);
   };
 
@@ -395,6 +455,34 @@ export default function NutritionScreen() {
                   keyboardType="numeric"
                 />
               </View>
+
+              <TouchableOpacity
+                style={styles.photoButton}
+                onPress={pickImage}
+                disabled={analyzing}
+              >
+                {analyzing ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <IconSymbol name="camera.fill" size={20} color="#000" />
+                )}
+                <Text style={styles.photoButtonText}>
+                  {analyzing
+                    ? "Analyzing Food..."
+                    : selectedImage
+                      ? "Change Photo"
+                      : "Take Photo"}
+                </Text>
+              </TouchableOpacity>
+
+              {selectedImage && (
+                <View style={styles.imagePreviewContainer}>
+                  <Image
+                    source={{ uri: selectedImage }}
+                    style={styles.imagePreview}
+                  />
+                </View>
+              )}
 
               <TouchableOpacity
                 style={styles.saveButton}
@@ -710,5 +798,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#FFF",
+  },
+  photoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 12,
+    marginBottom: 16,
+    borderStyle: "dashed",
+  },
+  photoButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#000",
+  },
+  imagePreviewContainer: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  imagePreview: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
   },
 });
