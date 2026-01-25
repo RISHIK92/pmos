@@ -9,3 +9,4 @@ class RegisterRequest(BaseModel):
 class RegisterResponse(BaseModel):
     message: str
     status: int
+    githubUsername: Optional[str] = None

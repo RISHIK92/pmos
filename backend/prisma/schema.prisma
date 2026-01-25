@@ -20,6 +20,12 @@ model User {
     email String @unique
 
     fcmToken String?
+    githubToken String?
+    githubUsername String?
+    
+    slackToken String?
+    slackTeamName String?
+    slackId String?
 
     ConversationLog ConversationLog[]
     Memory Memory[]
@@ -41,6 +47,7 @@ model User {
     periodCycles PeriodCycle[]
     
     bankAccounts BankAccount[]
+    dailyJournals DailyJournal[]
 }
 
 model ConversationLog {
@@ -312,4 +319,20 @@ model PeriodCycle {
   updatedAt DateTime @updatedAt
   
   @@index([userId, startDate])
+}
+
+model DailyJournal {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  date      String   // "YYYY-MM-DD"
+  content   String   // The actual journal entry
+  type      String   @default("PERSONAL") // "PERSONAL", "DEV"
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([userId, date, type]) // One journal per type per day per user
+  @@index([userId])
 }

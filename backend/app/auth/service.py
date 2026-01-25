@@ -15,7 +15,7 @@ class AuthService:
                     where={"id": uid},
                     data={"fcmToken": fcm_token}
                 )
-            return RegisterResponse(message="Login Successful", status=200)
+            return RegisterResponse(message="Login Successful", status=200, githubUsername=existingUser.githubUsername)
 
         if not existingUser:
             user_data = {
@@ -28,4 +28,4 @@ class AuthService:
             await db.user.create(
                 data=user_data
             )
-        return RegisterResponse(message="Login Successful", status=200)
+        return RegisterResponse(message="Login Successful", status=200, githubUsername=None)

@@ -32,7 +32,13 @@ export default function AppLayout() {
           <Stack.Screen name="restrictor" />
           <Stack.Screen name="config" />
           <Stack.Screen name="nutrition" />
+          <Stack.Screen name="dev" />
+          <Stack.Screen name="journal" />
           {/* Add other screens here if needed */}
+          <Stack.Screen
+            name="auth-success"
+            options={{ presentation: "modal" }}
+          />
         </Stack>
       </Sidebar>
     </SidebarContext.Provider>

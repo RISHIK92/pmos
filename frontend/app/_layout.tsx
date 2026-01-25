@@ -122,6 +122,10 @@ export default function RootLayout() {
           name="modal"
           options={{ presentation: "modal", title: "Modal" }}
         />
+        <Stack.Screen
+          name="auth-success"
+          options={{ presentation: "transparentModal", headerShown: false }}
+        />
       </Stack>
 
       <StatusBar backgroundColor="transparent" />

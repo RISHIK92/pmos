@@ -153,7 +153,7 @@ export function Sidebar({ isOpen, onClose, children }: SidebarProps) {
               onPress={() => navigateTo("/(tabs)/tasks")}
             />
 
-            <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Life</Text>
+            <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Life</Text>
             <MenuItem
               icon={pathname.includes("health") ? "heart" : "heart-outline"}
               label="Health"
@@ -188,6 +188,14 @@ export function Sidebar({ isOpen, onClose, children }: SidebarProps) {
               }
               onPress={() => navigateTo("/(tabs)/content")}
             />
+            {/* <MenuItem
+              icon={pathname.includes("journal") ? "book" : "book-outline"}
+              label="Journal"
+              isActive={
+                pathname === "/journal" || pathname === "/(tabs)/journal"
+              }
+              onPress={() => navigateTo("/(tabs)/journal")}
+            /> */}
 
             <View style={styles.divider} />
 
@@ -210,6 +218,14 @@ export function Sidebar({ isOpen, onClose, children }: SidebarProps) {
               label="Config"
               isActive={pathname === "/config" || pathname === "/(tabs)/config"}
               onPress={() => navigateTo("/(tabs)/config")}
+            />
+            <MenuItem
+              icon={
+                pathname.includes("dev") ? "code-slash" : "code-slash-outline"
+              }
+              label="Dev"
+              isActive={pathname === "/dev" || pathname === "/(tabs)/dev"}
+              onPress={() => navigateTo("/(tabs)/dev")}
             />
           </View>
 
@@ -292,14 +308,14 @@ const styles = StyleSheet.create({
   menuContainer: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   sectionTitle: {
     fontSize: 11,
     fontWeight: "700",
     color: "#B2BEC3",
     marginLeft: 16,
-    marginBottom: 12,
+    marginBottom: 10,
     opacity: 1,
     textTransform: "uppercase",
     letterSpacing: 1,
@@ -334,7 +350,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: "#F1F2F6",
-    marginVertical: 24,
+    marginVertical: 14,
     marginHorizontal: 16,
   },
   footer: {

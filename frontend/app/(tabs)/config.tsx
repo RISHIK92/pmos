@@ -10,17 +10,20 @@ import {
   Dimensions,
   Switch,
   Image,
-  Linking,
+  Linking as RNLinking,
   Platform,
   PermissionsAndroid,
   Alert,
 } from "react-native";
+import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SidebarContext } from "./_layout";
-import Animated, { FadeInUp } from "react-native-reanimated";
-import { auth } from "../../lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
+import * as SecureStore from "expo-secure-store";
+import Animated, { FadeInUp } from "react-native-reanimated";
+import { auth } from "@/lib/firebase";
 
 const { width } = Dimensions.get("window");
 
@@ -79,6 +82,27 @@ export default function ConfigScreen() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      // Check if the URL matches our backend redirect
+      if (event.url.includes("pmos://config")) {
+        WebBrowser.dismissBrowser();
+
+        // ⚡ REFETCH DATA IMMEDIATELY
+        if (auth.currentUser) {
+          updateIntegrations(auth.currentUser);
+        }
+      }
+    };
+
+    // Listen for incoming links
+    const subscription = Linking.addEventListener("url", handleDeepLink);
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     // 1. Auth Listener
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -91,25 +115,104 @@ export default function ConfigScreen() {
     return () => unsubscribe();
   }, []);
 
-  const updateIntegrations = (currentUser: User | null) => {
+  const updateIntegrations = async (currentUser: User | null) => {
     if (!currentUser) return;
+
+    // 1. Check Google (Firebase)
+    const isGoogle = currentUser.providerData.some(
+      (p) => p.providerId === "google.com",
+    );
+
+    // 2. Check GitHub & Slack (Backend)
+    let githubUser = null;
+    let slackTeam = null;
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`${backendUrl}/auth/register`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}), // Empty body, we just want the profile
+      });
+      if (res.ok) {
+        const data = await res.json();
+        githubUser = data.githubUsername;
+        slackTeam = data.slackTeamName;
+      }
+    } catch (e) {
+      console.error("Failed to fetch integrations", e);
+    }
 
     setIntegrations((prev) =>
       prev.map((item) => {
         if (item.name === "Google") {
-          const isGoogle = currentUser.providerData.some(
-            (p) => p.providerId === "google.com"
-          );
           return {
             ...item,
             connected: isGoogle,
-            desc: isGoogle ? currentUser.email || "Connected" : "Not Connected",
+            desc:
+              isGoogle && currentUser
+                ? currentUser.email || "Connected"
+                : "Not Connected",
           };
         }
-        return item; // GitHub/Slack logic to be added
-      })
+        if (item.name === "GitHub") {
+          return {
+            ...item,
+            connected: !!githubUser,
+            desc: githubUser || "Not Connected",
+          };
+        }
+        if (item.name === "Slack") {
+          return {
+            ...item,
+            connected: !!slackTeam,
+            desc: slackTeam || "Sync workspace",
+          };
+        }
+        return item;
+      }),
     );
   };
+
+  const backendUrl =
+    Platform.OS === "android"
+      ? "http://10.243.161.129:8000"
+      : "http://localhost:8000";
+
+  const handleGitHubConnect = async () => {
+    try {
+      if (!user?.email) {
+        Alert.alert("Error", "You must be logged in to connect GitHub.");
+        return;
+      }
+      await WebBrowser.openAuthSessionAsync(
+        `${backendUrl}/auth/github/login?email=${encodeURIComponent(user.email)}`,
+        "pmos://",
+      );
+    } catch (e) {
+      Alert.alert("Error", "Failed to open browser");
+    }
+  };
+
+  const handleSlackConnect = async () => {
+    try {
+      if (!user?.email) return;
+
+      await WebBrowser.openAuthSessionAsync(
+        `${backendUrl}/auth/slack/login?email=${encodeURIComponent(user.email)}`,
+        "pmos://",
+      );
+    } catch (e) {
+      console.log(e);
+      Alert.alert("Error", "Failed to connect Slack");
+    }
+  };
+
+  useEffect(() => {
+    updateIntegrations(user);
+  }, [user]);
 
   const checkPermissions = async () => {
     if (Platform.OS !== "android") return;
@@ -118,14 +221,14 @@ export default function ConfigScreen() {
       permissions.map(async (p) => {
         const granted = await PermissionsAndroid.check(p.permission);
         return { ...p, enabled: granted };
-      })
+      }),
     );
     setPermissions(newPermissions);
   };
 
   const togglePermission = async (id: string) => {
     if (Platform.OS !== "android") {
-      Linking.openSettings();
+      RNLinking.openSettings();
       return;
     }
 
@@ -137,8 +240,8 @@ export default function ConfigScreen() {
         "This permission is managed by your system settings. Go to Settings to disable it?",
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Open Settings", onPress: () => Linking.openSettings() },
-        ]
+          { text: "Open Settings", onPress: () => RNLinking.openSettings() },
+        ],
       );
     } else {
       // Request Permission directly or Open Settings if blocked
@@ -155,15 +258,15 @@ export default function ConfigScreen() {
                 { text: "Cancel", style: "cancel" },
                 {
                   text: "Open Settings",
-                  onPress: () => Linking.openSettings(),
+                  onPress: () => RNLinking.openSettings(),
                 },
-              ]
+              ],
             );
           }
         }
       } catch (err) {
         console.warn(err);
-        Linking.openSettings();
+        RNLinking.openSettings();
       }
     }
   };
@@ -183,7 +286,7 @@ export default function ConfigScreen() {
           <View style={styles.headerRight}>
             <TouchableOpacity
               style={styles.menuButton}
-              onPress={() => Linking.openSettings()}
+              onPress={() => RNLinking.openSettings()}
             >
               <Ionicons name="settings-outline" size={22} color="#2D3436" />
             </TouchableOpacity>
@@ -274,7 +377,15 @@ export default function ConfigScreen() {
                       ? styles.connectedBtn
                       : styles.disconnectedBtn,
                   ]}
-                  disabled={true}
+                  onPress={() => {
+                    if (item.name === "GitHub" && !item.connected) {
+                      handleGitHubConnect();
+                    }
+                    if (item.name === "Slack" && !item.connected) {
+                      handleSlackConnect();
+                    }
+                  }}
+                  disabled={false}
                 >
                   <Text
                     style={[
