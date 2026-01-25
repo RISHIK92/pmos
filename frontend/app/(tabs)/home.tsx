@@ -14,6 +14,7 @@ import {
   Modal,
   Alert,
   Linking,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -34,6 +35,7 @@ import { Audio } from "expo-av";
 import { shareAsync } from "expo-sharing";
 import { WaveformIcon } from "@/components/ui/WaveformIcon";
 import { FCMManager } from "../../utils/FCMManager";
+import { IntentHandler } from "../../utils/IntentHandler";
 
 const { width } = Dimensions.get("window");
 
@@ -94,6 +96,10 @@ export default function ChatScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [initializing, setInitializing] = useState(true);
 
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
+  const [hasMoreHistory, setHasMoreHistory] = useState(true);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
@@ -103,6 +109,8 @@ export default function ChatScreen() {
         try {
           // 1. Get Auth Token
           const token = await firebaseUser.getIdToken();
+
+          await fetchHistory(token, null); // Initial load
 
           // 2. Get FCM Token (Request permission if needed)
           const hasPermission = await FCMManager.requestPermission();
@@ -133,6 +141,63 @@ export default function ChatScreen() {
 
     return unsubscribe;
   }, [initializing]);
+
+  const fetchHistory = async (token: string, cursor: string | null) => {
+    try {
+      setLoadingHistory(true);
+      const backendUrl =
+        Platform.OS === "android"
+          ? "http://10.243.161.129:8000"
+          : "http://localhost:8000";
+      let url = `${backendUrl}/query/history?limit=7`;
+      if (cursor) url += `&cursor=${cursor}`;
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+
+        if (data.length < 7) setHasMoreHistory(false);
+        if (data.length > 0) {
+          setHistoryCursor(data[data.length - 1].id);
+
+          const historyMessages: Message[] = data
+            .reverse() // Reverse first: oldest to newest
+            .flatMap((log: any) => [
+              {
+                id: log.id + "_user",
+                text: log.user_raw,
+                sender: "user",
+                timestamp: new Date(log.created_at).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              },
+              {
+                id: log.id + "_ai",
+                text: log.ai_response,
+                sender: "system",
+                timestamp: new Date(log.created_at).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+                sources: ["History"],
+              },
+            ]);
+
+          setMessages((prev) =>
+            cursor ? [...historyMessages, ...prev] : historyMessages,
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch history", error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const processingIndicatorStyle = useAnimatedStyle(() => ({
     transform: [{ scale: processingScale.value }],
@@ -252,6 +317,28 @@ export default function ChatScreen() {
     setInputText("");
     setIsTyping(true);
 
+    // 1. Check Local Intents first
+    try {
+      const intentResult = await IntentHandler.process(queryText);
+      if (intentResult.success) {
+        setIsTyping(false);
+        const systemMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: intentResult.message,
+          sender: "system",
+          timestamp: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          sources: ["System Action"],
+        };
+        setMessages((prev) => [...prev, systemMessage]);
+        return;
+      }
+    } catch (e) {
+      console.error("Intent processing failed, falling back to AI", e);
+    }
+
     try {
       const token = await user.getIdToken();
       const backendUrl =
@@ -259,7 +346,7 @@ export default function ChatScreen() {
           ? "http://10.243.161.129:8000"
           : "http://localhost:8000";
 
-      const apiResponse = await fetch(`${backendUrl}/query/text`, {
+      const apiResponse = await fetch(`${backendUrl}/query/query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -421,6 +508,23 @@ export default function ChatScreen() {
             messages.length === 0 && { flex: 1, justifyContent: "center" },
           ]}
           showsVerticalScrollIndicator={false}
+          onScroll={async (event) => {
+            if (
+              event.nativeEvent.contentOffset.y <= 0 &&
+              hasMoreHistory &&
+              !loadingHistory &&
+              user &&
+              historyCursor
+            ) {
+              console.log("Loading more history...");
+              const token = await user.getIdToken();
+              await fetchHistory(token, historyCursor);
+            }
+          }}
+          scrollEventThrottle={16}
+          ListHeaderComponent={
+            loadingHistory ? <ActivityIndicator style={{ margin: 10 }} /> : null
+          }
           ListEmptyComponent={
             <ChatEmptyState
               loggedIn={!!user}
@@ -712,6 +816,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 20,
     paddingTop: 24,
+    paddingBottom: 60,
   },
   userContainer: {
     marginBottom: 24,

@@ -10,7 +10,7 @@ from app.nutrition.schema import (
     MealAnalyzeRequest
 )
 from app.nutrition import service
-from services.food_analyzer import analyze_food_image
+from app.chains.food_analyzer import analyze_food_image
 from types import SimpleNamespace
 
 router = APIRouter(prefix="/nutrition", tags=["Nutrition"])

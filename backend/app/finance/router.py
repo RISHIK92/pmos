@@ -4,7 +4,7 @@ from common.security import verify_token
 from app.finance.controller import FinanceController
 from app.finance.schema import TransactionCreate, TransactionResponse, PendingTransactionCreate, PendingTransactionResponse, TransactionUpdate
 from typing import List, Optional
-from services.sms_parser import parse_sms as parse_sms_service
+from app.chains.sms_parser import parse_sms as parse_sms_service
 from core.lifespan import db
 
 router = APIRouter(prefix="/finance")

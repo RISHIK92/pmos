@@ -4,14 +4,9 @@ from datetime import datetime, timedelta
 from .schema import MealItemCreate, MealItemUpdate
 
 async def get_weekly_logs(user_id: str, db: Prisma) -> List[Dict[str, Any]]:
-    # 1. Determine last 7 days dates
-    # Assuming "today" is according to client or server time. Server time for now.
     today = datetime.now()
     dates = []
-    days_short = ["S", "M", "T", "W", "T", "F", "S"] # 0=Sunday in some logic, but python weekday 0=Monday.
-    # Frontend logic: days[date.getDay()] -> getDay 0=Sun. Python isoweekday 1=Mon, 7=Sun.
-    # Let's align with JS:
-    # 0=Sun, 1=Mon, ..., 6=Sat
+    days_short = ["S", "M", "T", "W", "T", "F", "S"] 
     
     for i in range(6, -1, -1):
        d = today - timedelta(days=i)
@@ -29,15 +24,6 @@ async def get_weekly_logs(user_id: str, db: Prisma) -> List[Dict[str, Any]]:
     )
     
     logs_map = {log.date: log for log in logs}
-    
-    # 3. Construct response matching frontend structure (partially, or full daily log DB objects)
-    # The frontend expects a list of "DailyLog" objects with "meals" as a Record.
-    # We will return the list of Pydantic-compatible dicts, 
-    # BUT the frontend might need to adapt.
-    # For now, let's return the DB-style list, and let frontend adapt OR 
-    # we can try to help.
-    # Actually, let's return a list where each item corresponds to one of the last 7 days,
-    # ensuring gaps are filled with empty logs.
     
     result = []
     for d in dates:
@@ -104,9 +90,6 @@ async def add_meal(user_id: str, meal_data: MealItemCreate, db: Prisma):
     return new_meal
 
 async def update_meal(user_id: str, meal_id: str, meal_data: MealItemUpdate, db: Prisma):
-    # Verify ownership via relation? Prisma query makes it easy
-    # But usually just check ID. For strictness, check if log.userId == user_id.
-    # Simplified: return updated item
     
     return await db.mealitem.update(
         where={"id": meal_id},

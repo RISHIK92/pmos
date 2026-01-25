@@ -5,8 +5,8 @@ from app.query.schema import QueryRequest
 service = QueryService()
 
 class QueryContoller:
-    async def query(self, query: QueryRequest):
-        response = await service.query(query)
+    async def query(self, query: QueryRequest, user: dict):
+        response = await service.query(query, user)
         return response
     
     async def voice_query(self, file: UploadFile):
@@ -14,3 +14,7 @@ class QueryContoller:
 
         response = await service.voice_query(temp_path)
         return response
+
+    async def get_history(self, user: dict, limit: int = 7, cursor: str = None):
+        uid = user["uid"]
+        return await service.get_history(uid, limit, cursor)
