@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -22,6 +23,11 @@ from app.journal.router import router as journal_router
 import app.core.fcm
 
 app = FastAPI(lifespan=lifespan)
+
+# Ensure static directory exists
+static_path = Path("static")
+static_path.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 app.include_router(auth_router)
 app.include_router(github_router)

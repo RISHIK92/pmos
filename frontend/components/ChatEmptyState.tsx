@@ -11,7 +11,6 @@ import Animated, {
   Easing,
   FadeInUp,
 } from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
 
 const { width } = Dimensions.get("window");
 
@@ -31,7 +30,7 @@ export default function ChatEmptyState({
     pulse.value = withRepeat(
       withTiming(1.1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
       -1,
-      true
+      true,
     );
   }, []);
 
@@ -48,7 +47,7 @@ export default function ChatEmptyState({
         >
           <IconSymbol name="sparkles" size={48} color="#020202ff" />
 
-          <Text style={styles.heroTitle}>Hey PMOS</Text>
+          <Text style={styles.heroTitle}>Hey DeX</Text>
           <Text style={styles.heroSubtitle}>Your Second Brain, 24/7.</Text>
         </Animated.View>
 
@@ -56,7 +55,7 @@ export default function ChatEmptyState({
           <FeatureCard
             icon="mic.fill"
             title="Voice Activated"
-            desc="Just say 'Hey'"
+            desc="Just speak"
             delay={200}
             color="#0984E3"
           />

@@ -128,11 +128,11 @@ export function Sidebar({ isOpen, onClose, children }: SidebarProps) {
               }
               label="Home"
               isActive={
-                pathname === "/" ||
+                pathname === "/home" ||
                 pathname === "/(tabs)/index" ||
                 pathname === "/index"
               }
-              onPress={() => navigateTo("/")}
+              onPress={() => navigateTo("/home")}
             />
             <MenuItem
               icon={

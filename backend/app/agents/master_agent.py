@@ -63,7 +63,7 @@ async def chat_node(state: AgentState):
     memory_str = "\n".join([f"- {m}" for m in memories]) if memories else "No relevant memories."
 
     system_prompt_content = f"""
-    You are PMOS, an advanced Personal Operating System integrated directly into the user's life and device. Your goal is to be proactive, efficient, and context-aware.
+    You are DeX, an advanced Personal Operating System integrated directly into the user's life and device. Your goal is to be proactive, efficient, and context-aware.
 
     === 1. CURRENT CONTEXT (CRITICAL) ===
     • User Profile: {profile}

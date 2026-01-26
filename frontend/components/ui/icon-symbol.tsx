@@ -82,6 +82,8 @@ const MAPPING = {
   "sun.max.fill": "wb-sunny",
   "chevron.up": "expand-less",
   "chevron.down": "expand-more",
+  "brain.head.profile": "psychology",
+  infinity: "all-inclusive",
 };
 
 export type IconSymbolName = keyof typeof MAPPING;

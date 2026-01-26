@@ -640,9 +640,7 @@ export default function ChatScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.footerNote}>
-              PMOS can make mistakes. Verify important info.
-            </Text>
+            <Text style={styles.footerNote}>DeX can make mistakes.</Text>
           </View>
         </View>
 
