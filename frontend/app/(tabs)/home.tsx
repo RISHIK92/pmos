@@ -32,7 +32,6 @@ import Animated, {
   withRepeat,
 } from "react-native-reanimated";
 import { Audio } from "expo-av";
-import { shareAsync } from "expo-sharing";
 import { WaveformIcon } from "@/components/ui/WaveformIcon";
 import { FCMManager } from "../../utils/FCMManager";
 import { IntentHandler } from "../../utils/IntentHandler";
@@ -421,43 +420,6 @@ export default function ChatScreen() {
               <Markdown style={markdownStyles}>{item.text}</Markdown>
             </View>
           </View>
-          {item.sources && (
-            <View style={styles.sourcesContainer}>
-              <TouchableOpacity
-                style={styles.sourcesHeader}
-                onPress={() => {
-                  setExpandedSources((prev) => {
-                    const newSet = new Set(prev);
-                    if (newSet.has(item.id)) {
-                      newSet.delete(item.id);
-                    } else {
-                      newSet.add(item.id);
-                    }
-                    return newSet;
-                  });
-                }}
-              >
-                <IconSymbol name="sparkles" size={14} color="#636E72" />
-                <Text style={styles.sourcesLabel}>SOURCES</Text>
-                <IconSymbol
-                  name={
-                    expandedSources.has(item.id) ? "chevron.up" : "chevron.down"
-                  }
-                  size={14}
-                  color="#636E72"
-                />
-              </TouchableOpacity>
-              {expandedSources.has(item.id) && (
-                <View style={styles.sourcesList}>
-                  {item.sources.map((source, i) => (
-                    <View key={i} style={styles.sourceChip}>
-                      <Text style={styles.sourceText}>{source}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
         </Animated.View>
       );
     }
@@ -663,7 +625,7 @@ export default function ChatScreen() {
                     isProcessingVoice
                       ? "hourglass"
                       : inputText.length > 0
-                        ? "arrow.up.right"
+                        ? "arrow.right"
                         : isRecording
                           ? "checkmark"
                           : "mic.fill"
@@ -939,8 +901,8 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   answerRow: {
-    flexDirection: "row",
-    gap: 16,
+    flexDirection: "column",
+    gap: 8,
   },
   systemIcon: {
     width: 32,
@@ -949,7 +911,6 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2,
   },
   answerContent: {
     flex: 1,
@@ -958,7 +919,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#2D3436",
-    marginBottom: 4,
   },
   systemText: {
     fontSize: 16,

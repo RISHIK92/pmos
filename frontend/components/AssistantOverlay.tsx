@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import AppLauncher from "../utils/AppLauncher";
 import ContactManager from "../utils/ContactManager";
 import { IntentHandler } from "../utils/IntentHandler";
+import Markdown from "react-native-markdown-display";
 import {
   View,
   Text,
@@ -16,6 +17,7 @@ import {
   Alert,
   Linking,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -122,7 +124,6 @@ export default function AssistantOverlay() {
       return;
     }
 
-    setLastUserQuery(queryText);
     setInputText("");
     setResponse(null);
     setIsProcessingText(true);
@@ -164,6 +165,11 @@ export default function AssistantOverlay() {
     const cleanText = text.trim();
     if (!cleanText) return;
 
+    // Show text immediately
+    setLastUserQuery(cleanText);
+    setResponse(null);
+    setIsProcessingText(true);
+
     console.log("Processing Intent via IntentHandler:", cleanText);
 
     // 1. Delegate to IntentHandler
@@ -171,7 +177,7 @@ export default function AssistantOverlay() {
 
     // 3. Handle Success
     if (result.success) {
-      setLastUserQuery(cleanText);
+      setIsProcessingText(false);
       setResponse(result.message);
 
       // Special case: If it was a system toggle, we might not want to dismiss immediately?
@@ -187,7 +193,7 @@ export default function AssistantOverlay() {
       processQuery(cleanText);
     } else {
       // Failed but not AI (e.g. contact not found), show error
-      setLastUserQuery(cleanText);
+      setIsProcessingText(false);
       setResponse(result.message || "Command failed.");
     }
   };
@@ -443,35 +449,41 @@ const OverlayContent = ({
       </View>
 
       {/* CHAT UI AREA */}
-      <View style={styles.chatArea}>
-        {/* User Query (Right) */}
-        {lastUserQuery && (
-          <View style={styles.userBubbleContainer}>
-            <View style={styles.userBubble}>
-              <Text style={styles.userText}>{lastUserQuery}</Text>
+      {/* CHAT UI AREA */}
+      <View style={{ maxHeight: Dimensions.get("window").height * 0.75 }}>
+        <ScrollView
+          contentContainerStyle={styles.chatArea}
+          showsVerticalScrollIndicator={true}
+        >
+          {/* User Query (Right) */}
+          {lastUserQuery && (
+            <View style={styles.userBubbleContainer}>
+              <View style={styles.userBubble}>
+                <Text style={styles.userText}>{lastUserQuery}</Text>
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* AI Response (Left) */}
-        {(isProcessingText || response) && (
-          <View style={styles.aiBubbleContainer}>
-            <View style={styles.aiIcon}>
-              <Ionicons
-                name={isProcessingText ? "sparkles" : "radio-button-on"}
-                size={14}
-                color="#FFF"
-              />
+          {/* AI Response (Left) */}
+          {(isProcessingText || response) && (
+            <View style={styles.aiBubbleContainer}>
+              <View style={styles.aiIcon}>
+                <Ionicons
+                  name={isProcessingText ? "sparkles" : "radio-button-on"}
+                  size={14}
+                  color="#FFF"
+                />
+              </View>
+              <View style={styles.aiBubble}>
+                {isProcessingText ? (
+                  <Text style={styles.processingDot}>• • •</Text>
+                ) : (
+                  <Markdown style={markdownStyles}>{response}</Markdown>
+                )}
+              </View>
             </View>
-            <View style={styles.aiBubble}>
-              {isProcessingText ? (
-                <Text style={styles.processingDot}>• • •</Text>
-              ) : (
-                <Text style={styles.aiText}>{response}</Text>
-              )}
-            </View>
-          </View>
-        )}
+          )}
+        </ScrollView>
       </View>
 
       {/* Input Row */}
@@ -518,13 +530,59 @@ const OverlayContent = ({
   );
 };
 
+const markdownStyles = StyleSheet.create({
+  body: {
+    fontFamily: Platform.OS === "ios" ? "System" : "Roboto",
+    fontSize: 15,
+    color: "#2D3436",
+    lineHeight: 22,
+  },
+  heading1: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#2D3436",
+    marginVertical: 8,
+  },
+  heading2: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#2D3436",
+    marginVertical: 6,
+  },
+  paragraph: {
+    marginVertical: 4,
+  },
+  list_item: {
+    marginVertical: 2,
+  },
+  code_inline: {
+    backgroundColor: "#E1E1E1",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    padding: 2,
+    borderRadius: 4,
+    fontSize: 13,
+  },
+  code_block: {
+    backgroundColor: "#E1E1E1",
+    padding: 8,
+    borderRadius: 8,
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 13,
+    marginVertical: 6,
+  },
+  link: {
+    color: "#0984E3",
+    textDecorationLine: "underline",
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "transparent",
     justifyContent: "flex-end",
-    paddingBottom: 20,
-    paddingHorizontal: 16,
+    paddingBottom: 4,
+    paddingHorizontal: 6,
   },
   dismissArea: {
     ...StyleSheet.absoluteFillObject,
@@ -551,7 +609,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0, 184, 148, 0.25)",
   },
   contentContainer: {
-    padding: 16,
+    padding: 6,
     paddingBottom: 20,
   },
   topRow: {
@@ -562,7 +620,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F0F2F5",
-    paddingVertical: 6,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 16,
     gap: 6,
@@ -613,7 +671,7 @@ const styles = StyleSheet.create({
   chatArea: {
     marginBottom: 20,
     gap: 16,
-    minHeight: 100,
+    flexGrow: 1,
     justifyContent: "flex-end",
   },
   userBubbleContainer: {

@@ -3,7 +3,7 @@ from app.agents.tools import CLIENT_TOOLS, CLIENT_TOOL_NAMES, SERVER_TOOLS, SERV
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 from langchain_groq import ChatGroq
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 from services.tool_registry import tool_retriever
 from groq import AsyncGroq
 import os
@@ -131,13 +131,25 @@ async def search_node(state: AgentState):
         if last_message.tool_calls[0]["name"] == "transfer_to_search":
             query = last_message.tool_calls[0]["args"].get("query", "")
     
+    system_prompt = f"""
+    RESPONSE RULES:
+    1. **Be Concise & Direct:** Avoid long paragraphs unless deeply analyzing a complex topic.
+    2. **Just the Facts:** Do not add "fluff" like "Here is what I found" or "I hope this helps."
+    3. **Depth:** Only provide lengthy, detailed explanations if the user explicitly asks for an explanation or the topic is highly complex.
+    4. **Important** Do not mention how the answer was obtained.
+    5. **Links:** ALWAYS format links as `[Title](URL)`. Never output raw URLs.
+    """
+    
     if not query:
         query = next((m.content for m in reversed(messages) if m.type == "human"), "")
 
     print(f"🌍 Routing to Search Node for: {query}")
     
     # Direct invocation via LangChain
-    response = await search_llm.ainvoke([{"role": "user", "content": query}])
+    response = await search_llm.ainvoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=query)
+    ])
     
     return {"messages": [response]}
     
