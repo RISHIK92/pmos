@@ -48,6 +48,11 @@ async def chat_node(state: AgentState):
             if "create_task" in tool_retriever.tool_map:
                 relevant_tools.append(tool_retriever.tool_map["create_task"])
                 print("➕ Auto-injected 'create_task' for context safety.")
+        
+        # Always inject Search capability
+        if "transfer_to_search" in tool_retriever.tool_map and "transfer_to_search" not in current_names:
+            relevant_tools.append(tool_retriever.tool_map["transfer_to_search"])
+            print("➕ Auto-injected 'transfer_to_search' for global search availability.")
 
         print(f"🔎 Final Tools: {[t.name for t in relevant_tools]}")
         llm_with_tools = llm.bind_tools(relevant_tools)

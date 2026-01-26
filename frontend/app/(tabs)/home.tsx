@@ -36,6 +36,7 @@ import { shareAsync } from "expo-sharing";
 import { WaveformIcon } from "@/components/ui/WaveformIcon";
 import { FCMManager } from "../../utils/FCMManager";
 import { IntentHandler } from "../../utils/IntentHandler";
+import Markdown from "react-native-markdown-display";
 
 const { width } = Dimensions.get("window");
 
@@ -417,7 +418,7 @@ export default function ChatScreen() {
               <IconSymbol name="sparkles" size={20} color="#00B894" />
             </View>
             <View style={styles.answerContent}>
-              <Text style={styles.systemText}>{item.text}</Text>
+              <Markdown style={markdownStyles}>{item.text}</Markdown>
             </View>
           </View>
           {item.sources && (
@@ -786,6 +787,58 @@ export default function ChatScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+const markdownStyles = StyleSheet.create({
+  body: {
+    fontFamily: Platform.OS === "ios" ? "System" : "Roboto",
+    fontSize: 15,
+    color: "#2D3436",
+    lineHeight: 24,
+  },
+  heading1: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#2D3436",
+    marginVertical: 10,
+  },
+  heading2: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#2D3436",
+    marginVertical: 8,
+  },
+  heading3: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#2D3436",
+    marginVertical: 6,
+  },
+  paragraph: {
+    marginVertical: 4,
+  },
+  list_item: {
+    marginVertical: 2,
+  },
+  code_inline: {
+    backgroundColor: "#F1F2F6",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    padding: 2,
+    borderRadius: 4,
+    fontSize: 14,
+  },
+  code_block: {
+    backgroundColor: "#F1F2F6",
+    padding: 10,
+    borderRadius: 8,
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 14,
+    marginVertical: 8,
+  },
+  link: {
+    color: "#0984E3",
+    textDecorationLine: "underline",
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
