@@ -1,8 +1,15 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
+from typing import Optional, List
+
+class ConversationMessage(BaseModel):
+    text: str
+    sender: str  # "user" or "system"
 
 class QueryRequest(BaseModel):
     query: str
+    conversation_history: Optional[List[ConversationMessage]] = None
+    timestamp: Optional[str] = None
 
 class QueryResponse(BaseModel):
     response: str

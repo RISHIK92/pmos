@@ -21,13 +21,6 @@ export const AlarmManager = {
 
     const lowerText = text.toLowerCase();
 
-    // Regex for: "set alarm for [hour]:[minute] [am/pm]"
-    // Matches:
-    // "7:30 am", "7:30", "7 am"
-    // Groups:
-    // 1: Hour (1-2 digits)
-    // 2: Minute (2 digits, optional)
-    // 3: AM/PM (optional)
     const timeRegex = /set\s+alarm\s+for\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i;
     const match = lowerText.match(timeRegex);
 

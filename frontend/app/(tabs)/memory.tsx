@@ -83,7 +83,7 @@ export default function MemoryScreen() {
 
   const backendUrl =
     Platform.OS === "android"
-      ? "http://10.243.161.129:8000"
+      ? "http://10.138.197.129:8000"
       : "http://localhost:8000";
 
   const fetchMemories = async () => {

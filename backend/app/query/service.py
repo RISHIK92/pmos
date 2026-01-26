@@ -7,7 +7,8 @@ from pathlib import Path
 from services.transcribe import voice_to_text
 from app.query.schema import QueryRequest
 from app.agents.master_agent import app as master_agent
-from langchain_core.messages import HumanMessage
+from app.agents.tools import CLIENT_TOOL_NAMES
+from langchain_core.messages import HumanMessage, AIMessage
 
 class QueryService:
     def __init__(self):
@@ -17,20 +18,61 @@ class QueryService:
 
     async def query(self, query: QueryRequest, user: dict):
         uid = user["uid"]
+        print(query.timestamp)
         
-        found_docs = ["User put keys on the kitchen counter yesterday."] 
+        found_docs = ["User put keys on the kitchen counter yesterday."]
 
         profile_str = "Name: Rishik, Role: Developer, Location: India"
+        if query.timestamp:
+            profile_str += f"\nUser Local Time: {query.timestamp}"
 
-        response = await master_agent.ainvoke({
-            "messages": [HumanMessage(content=query.query)],
-            "user_profile": profile_str,
-            "vector_context": found_docs
-        })
+        recent_logs = await db.conversationlog.find_many(
+            where={"userId": uid},
+            order={"createdAt": "desc"},
+            take=4
+        )
         
-        ai_text = response['messages'][-1].content
+        messages_list = []
+        for log in reversed(recent_logs):
+            messages_list.append(HumanMessage(content=log.userRaw))
+            messages_list.append(AIMessage(content=log.aiResponse))
+        
+        # Add the current query
+        messages_list.append(HumanMessage(content=query.query))
+
+        response = await master_agent.ainvoke(
+            {
+                "messages": messages_list,
+                "user_profile": profile_str,
+                "vector_context": found_docs
+            },
+            config={"configurable": {"user_id": uid}}
+        )
+        
+        ai_response = response['messages'][-1]
+        print(ai_response)
+        
+        if hasattr(ai_response, 'tool_calls') and ai_response.tool_calls:
+            tool_call = ai_response.tool_calls[0]
+            tool_name = tool_call["name"]
+            
+            if tool_name in CLIENT_TOOL_NAMES:
+                action_name = tool_name.replace("client_", "")
+                
+                result = {
+                    "type": "CLIENT_ACTION",
+                    "action": action_name,
+                    "data": tool_call["args"]
+                }
+                
+                return result
+        
+        # Normal text response
+        ai_text = ai_response.content
+        print(ai_text, "agd")
         
         result = {
+            "type": "TEXT",
             "response": ai_text
         }
         

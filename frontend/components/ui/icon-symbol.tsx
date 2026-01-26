@@ -80,6 +80,8 @@ const MAPPING = {
   exclamationmark: "priority-high",
   "bed.double.fill": "hotel",
   "sun.max.fill": "wb-sunny",
+  "chevron.up": "expand-less",
+  "chevron.down": "expand-more",
 };
 
 export type IconSymbolName = keyof typeof MAPPING;

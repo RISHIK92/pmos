@@ -68,7 +68,7 @@ const backgroundTask = async (taskDataArguments: any) => {
         return;
       }
 
-      const backendUrl = "http://10.243.161.129:8000";
+      const backendUrl = "http://10.138.197.129:8000";
 
       const response = await fetch(`${backendUrl}/finance/parse-sms`, {
         method: "POST",

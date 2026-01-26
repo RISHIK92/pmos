@@ -31,6 +31,7 @@ import { BlurView } from "expo-blur";
 import { WaveformIcon } from "./ui/WaveformIcon";
 import { Audio } from "expo-av";
 import { CameraView } from "expo-camera";
+import { auth } from "../lib/firebase";
 
 const { width } = Dimensions.get("window");
 
@@ -107,6 +108,20 @@ export default function AssistantOverlay() {
   const processQuery = async (queryText: string) => {
     if (!queryText.trim()) return;
 
+    // Check if user is signed in
+    const user = auth.currentUser;
+    if (!user) {
+      // Not signed in, redirect to home
+      if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(console.error);
+        recordingRef.current = null;
+      }
+      setVisible(false);
+      router.replace("/(tabs)/home");
+      return;
+    }
+
     setLastUserQuery(queryText);
     setInputText("");
     setResponse(null);
@@ -114,13 +129,18 @@ export default function AssistantOverlay() {
 
     const backendUrl =
       Platform.OS === "android"
-        ? "http://10.243.161.129:8000"
+        ? "http://10.138.197.129:8000"
         : "http://localhost:8000";
 
     try {
+      const token = await user.getIdToken();
+
       const res = await fetch(`${backendUrl}/query/query`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ query: queryText }),
       });
       const data = await res.json();
@@ -294,7 +314,7 @@ export default function AssistantOverlay() {
 
         const backendUrl =
           Platform.OS === "android"
-            ? "http://10.243.161.129:8000"
+            ? "http://10.138.197.129:8000"
             : "http://localhost:8000";
 
         try {

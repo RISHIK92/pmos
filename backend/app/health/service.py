@@ -14,9 +14,29 @@ class HealthService:
             }
         )
         if not goal:
-            # Try creating system goal if missing (fallback)
-            pass
-            return None
+            # Create system goal if missing
+            defaults = {
+                "Daily Steps": {"target": 10000, "unit": "steps", "icon": "figure.walk", "category": "health"},
+                "Water": {"target": 2000, "unit": "ml", "icon": "drop.fill", "category": "health"},
+                "Sleep": {"target": 480, "unit": "min", "icon": "moon.fill", "category": "health"},
+                "Calories": {"target": 2000, "unit": "kcal", "icon": "flame.fill", "category": "health"},
+            }
+            
+            if goal_title in defaults:
+                conf = defaults[goal_title]
+                goal = await db.goal.create(
+                    data={
+                        'userId': user_id,
+                        'title': goal_title,
+                        'target': conf['target'],
+                        'unit': conf['unit'],
+                        'icon': conf['icon'],
+                        'category': conf['category'], 
+                        'isSystem': True
+                    }
+                )
+            else:
+                return None
             
         # 2. Get/Create Log
         log = await db.goallog.find_unique(
@@ -65,7 +85,7 @@ class HealthService:
     async def update_hydration(self, user_id: str, date: str, amount: int):
         try:
             # Update Goal: "Hydration"
-            log = await self.get_or_create_goal_log(user_id, date, "Hydration")
+            log = await self.get_or_create_goal_log(user_id, date, "Water")
             if log:
                 await db.goallog.update(
                     where={'id': log.id},
@@ -82,7 +102,7 @@ class HealthService:
     async def get_history(self, user_id: str, start_date: str, end_date: str):
         try:
             step_goal = await db.goal.find_unique(where={'userId_title': {'userId': user_id, 'title': 'Daily Steps'}})
-            water_goal = await db.goal.find_unique(where={'userId_title': {'userId': user_id, 'title': 'Hydration'}})
+            water_goal = await db.goal.find_unique(where={'userId_title': {'userId': user_id, 'title': 'Water'}})
             sleep_goal = await db.goal.find_unique(where={'userId_title': {'userId': user_id, 'title': 'Sleep'}})
             cal_goal = await db.goal.find_unique(where={'userId_title': {'userId': user_id, 'title': 'Calories'}})
             

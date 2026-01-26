@@ -99,6 +99,9 @@ export default function ChatScreen() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
+  const [expandedSources, setExpandedSources] = useState<Set<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -121,7 +124,7 @@ export default function ChatScreen() {
 
           const backendUrl =
             Platform.OS === "android"
-              ? "http://10.243.161.129:8000"
+              ? "http://10.138.197.129:8000"
               : "http://localhost:8000";
 
           const data = await fetch(`${backendUrl}/auth/register`, {
@@ -147,7 +150,7 @@ export default function ChatScreen() {
       setLoadingHistory(true);
       const backendUrl =
         Platform.OS === "android"
-          ? "http://10.243.161.129:8000"
+          ? "http://10.138.197.129:8000"
           : "http://localhost:8000";
       let url = `${backendUrl}/query/history?limit=7`;
       if (cursor) url += `&cursor=${cursor}`;
@@ -269,7 +272,7 @@ export default function ChatScreen() {
 
         const backendUrl =
           Platform.OS === "android"
-            ? "http://10.243.161.129:8000"
+            ? "http://10.138.197.129:8000"
             : "http://localhost:8000";
 
         const response = await fetch(`${backendUrl}/query/voice`, {
@@ -343,21 +346,23 @@ export default function ChatScreen() {
       const token = await user.getIdToken();
       const backendUrl =
         Platform.OS === "android"
-          ? "http://10.243.161.129:8000"
+          ? "http://10.138.197.129:8000"
           : "http://localhost:8000";
-
+      console.log("Sending query with time:", new Date().toString());
       const apiResponse = await fetch(`${backendUrl}/query/query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ query: queryText }),
+        body: JSON.stringify({
+          query: queryText,
+          timestamp: new Date().toString(),
+        }),
       });
 
       const result = await apiResponse.json();
       setIsTyping(false);
-
       const response: Message = {
         id: (Date.now() + 1).toString(),
         text: result.response || "Sorry, I couldn't process your request.",
@@ -407,40 +412,51 @@ export default function ChatScreen() {
           layout={Layout.springify().damping(30).stiffness(200)}
           style={styles.systemContainer}
         >
-          {item.sources && (
-            <View style={styles.sourcesContainer}>
-              <View style={styles.sourcesHeader}>
-                <IconSymbol name="sparkles" size={14} color="#636E72" />
-                <Text style={styles.sourcesLabel}>SOURCES</Text>
-              </View>
-              <View style={styles.sourcesList}>
-                {item.sources.map((source, i) => (
-                  <View key={i} style={styles.sourceChip}>
-                    <Text style={styles.sourceText}>{source}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
           <View style={styles.answerRow}>
             <View style={styles.systemIcon}>
               <IconSymbol name="sparkles" size={20} color="#00B894" />
             </View>
             <View style={styles.answerContent}>
-              <Text style={styles.systemName}>PMOS Intelligence</Text>
               <Text style={styles.systemText}>{item.text}</Text>
-
-              <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.actionBtn}>
-                  <IconSymbol name="doc.text.fill" size={14} color="#B2BEC3" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionBtn}>
-                  <IconSymbol name="arrow.up.right" size={14} color="#B2BEC3" />
-                </TouchableOpacity>
-              </View>
             </View>
           </View>
+          {item.sources && (
+            <View style={styles.sourcesContainer}>
+              <TouchableOpacity
+                style={styles.sourcesHeader}
+                onPress={() => {
+                  setExpandedSources((prev) => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(item.id)) {
+                      newSet.delete(item.id);
+                    } else {
+                      newSet.add(item.id);
+                    }
+                    return newSet;
+                  });
+                }}
+              >
+                <IconSymbol name="sparkles" size={14} color="#636E72" />
+                <Text style={styles.sourcesLabel}>SOURCES</Text>
+                <IconSymbol
+                  name={
+                    expandedSources.has(item.id) ? "chevron.up" : "chevron.down"
+                  }
+                  size={14}
+                  color="#636E72"
+                />
+              </TouchableOpacity>
+              {expandedSources.has(item.id) && (
+                <View style={styles.sourcesList}>
+                  {item.sources.map((source, i) => (
+                    <View key={i} style={styles.sourceChip}>
+                      <Text style={styles.sourceText}>{source}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
         </Animated.View>
       );
     }
@@ -835,7 +851,8 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   sourcesContainer: {
-    marginBottom: 16,
+    marginTop: 16,
+    marginLeft: 12,
   },
   sourcesHeader: {
     flexDirection: "row",
@@ -852,6 +869,7 @@ const styles = StyleSheet.create({
   sourcesList: {
     flexDirection: "row",
     flexWrap: "wrap",
+    marginLeft: 16,
     gap: 8,
   },
   sourceChip: {

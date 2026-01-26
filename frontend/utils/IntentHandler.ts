@@ -9,6 +9,7 @@ import SmsManager from "./SmsManager";
 import { SleepManager } from "./SleepManager";
 // @ts-ignore
 import RNImmediatePhoneCall from "react-native-immediate-phone-call";
+import { auth } from "../lib/firebase";
 
 export interface IntentResult {
   success: boolean;
@@ -54,28 +55,37 @@ export const IntentHandler = {
     }
 
     // 2. Alarm Check
+    // 2. Alarm Check
     if (cleanText.toLowerCase().includes("alarm")) {
       console.log("⏰ Alarm command detected");
       const { success, message } = await AlarmManager.parseAndSet(cleanText);
-      return {
-        success,
-        message,
-        shouldDismiss: success,
-        type: "alarm",
-      };
+      if (success) {
+        return {
+          success,
+          message,
+          shouldDismiss: success,
+          type: "alarm",
+        };
+      }
+      console.log("⏰ Local parsing failed, falling back to AI...");
     }
 
+    // 3. Timer Check
     // 3. Timer Check
     if (cleanText.toLowerCase().includes("timer")) {
       console.log("⏳ Timer command detected");
       const { success, message } =
         await AlarmManager.parseAndSetTimer(cleanText);
-      return {
-        success,
-        message,
-        shouldDismiss: success,
-        type: "timer",
-      };
+
+      if (success) {
+        return {
+          success,
+          message,
+          shouldDismiss: success,
+          type: "timer",
+        };
+      }
+      console.log("⏳ Local timer parsing failed, falling back to AI...");
     }
 
     // 4. Media Controls
@@ -248,13 +258,218 @@ export const IntentHandler = {
       };
     }
 
-    // 10. AI Fallback (Not handled here, return distinct result)
-    return {
-      success: false,
-      message: "",
-      shouldDismiss: false,
-      type: "ai",
-    };
+    // 10. AI Fallback - Ask Server with Ghost Tools
+    console.log("🤖 Regex failed, asking Server with Ghost Tools...");
+    return await IntentHandler.askServerWithTools(cleanText);
+  },
+
+  // New method: Ask server and handle CLIENT_ACTION responses
+  askServerWithTools: async (text: string): Promise<IntentResult> => {
+    const backendUrl =
+      Platform.OS === "android"
+        ? "http://10.138.197.129:8000"
+        : "http://localhost:8000";
+
+    try {
+      // Get auth token if available
+      const user = auth.currentUser;
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (user) {
+        const token = await user.getIdToken();
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${backendUrl}/query/query`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: text,
+          timestamp: new Date().toString(),
+        }),
+      });
+
+      const data = await response.json();
+
+      // Handle CLIENT_ACTION from server
+      if (data.type === "CLIENT_ACTION") {
+        console.log("📱 Received CLIENT_ACTION:", data.action, data.data);
+        return await IntentHandler.handleClientAction(data.action, data.data);
+      }
+
+      // Normal TEXT response
+      return {
+        success: true,
+        message: data.response || data.content || JSON.stringify(data),
+        shouldDismiss: false,
+        type: "ai",
+      };
+    } catch (error) {
+      console.error("Server request failed:", error);
+      return {
+        success: false,
+        message: "Unable to reach server. Try again later.",
+        shouldDismiss: false,
+        type: "ai",
+      };
+    }
+  },
+
+  // Handle CLIENT_ACTION from server
+  handleClientAction: async (
+    action: string,
+    data: Record<string, any>,
+  ): Promise<IntentResult> => {
+    console.log(`🎯 Executing client action: ${action}`, data);
+
+    switch (action) {
+      case "call_contact": {
+        const { name } = data;
+        const { success, message } = await ContactManager.findAndCall(name);
+        return { success, message, shouldDismiss: success, type: "call" };
+      }
+
+      case "open_app": {
+        const { app_name } = data;
+        const launched = await AppLauncher.findAndOpen(app_name);
+        return {
+          success: launched,
+          message: launched
+            ? `Opening ${app_name}...`
+            : `App "${app_name}" not found.`,
+          shouldDismiss: launched,
+          type: "app",
+        };
+      }
+
+      case "set_alarm": {
+        const { time, label } = data;
+        const alarmText = label
+          ? `set alarm for ${time} ${label}`
+          : `set alarm for ${time}`;
+        const { success, message } = await AlarmManager.parseAndSet(alarmText);
+        return { success, message, shouldDismiss: success, type: "alarm" };
+      }
+
+      case "set_timer": {
+        const { duration } = data;
+        const { success, message } = await AlarmManager.parseAndSetTimer(
+          `set timer for ${duration}`,
+        );
+        return { success, message, shouldDismiss: success, type: "timer" };
+      }
+
+      case "play_media": {
+        const { action: mediaAction, song_name } = data;
+        let result;
+        if (mediaAction === "play" && song_name) {
+          result = await MediaManager.playSong(song_name);
+        } else {
+          const controlAction =
+            mediaAction === "previous"
+              ? "previous"
+              : mediaAction === "next"
+                ? "next"
+                : "play_pause";
+          result = await MediaManager.control(controlAction);
+        }
+        return {
+          success: result.success,
+          message: result.message,
+          shouldDismiss: true,
+          type: "media",
+        };
+      }
+
+      case "send_whatsapp": {
+        const { contact_name, message } = data;
+        const { success: contactSuccess, phone } =
+          await ContactManager.findContact(contact_name);
+        if (contactSuccess && phone) {
+          WhatsAppManager.send(phone, message);
+          return {
+            success: true,
+            message: `Sending WhatsApp to ${contact_name}...`,
+            shouldDismiss: true,
+            type: "whatsapp",
+          };
+        }
+        return {
+          success: false,
+          message: `Contact "${contact_name}" not found.`,
+          shouldDismiss: false,
+          type: "whatsapp",
+        };
+      }
+
+      case "send_sms": {
+        const { contact_name, message } = data;
+        try {
+          const { success: contactSuccess, phone } =
+            await ContactManager.findContact(contact_name);
+          if (contactSuccess && phone) {
+            await SmsManager.send(phone, message);
+            return {
+              success: true,
+              message: `SMS sent to ${contact_name}!`,
+              shouldDismiss: true,
+              type: "sms",
+            };
+          }
+          return {
+            success: false,
+            message: `Contact "${contact_name}" not found.`,
+            shouldDismiss: false,
+            type: "sms",
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            message: error.message || "Failed to send SMS.",
+            shouldDismiss: false,
+            type: "sms",
+          };
+        }
+      }
+
+      case "sleep_tracking": {
+        const { action: sleepAction } = data;
+        if (sleepAction === "start") {
+          const { success, message } = await SleepManager.startSleep();
+          return { success, message, shouldDismiss: success, type: "sleep" };
+        } else {
+          const { success, message } = await SleepManager.wakeUp();
+          return { success, message, shouldDismiss: success, type: "sleep" };
+        }
+      }
+
+      case "schedule_critical_memory": {
+        const { title, timestamp } = data;
+
+        console.log(`⏰ Scheduling Critical Alarm: "${title}" at ${timestamp}`);
+
+        // Use your existing logic to schedule the native alarm
+        AlarmManager.scheduleCriticalAlarm(title, Number(timestamp));
+
+        return {
+          success: true,
+          message: `Critical reminder set: ${title}`,
+          shouldDismiss: true, // Close the assistant so the alarm can ring later
+          type: "alarm",
+        };
+      }
+
+      default:
+        console.warn(`Unknown client action: ${action}`);
+        return {
+          success: false,
+          message: `Unknown action: ${action}`,
+          shouldDismiss: false,
+          type: "ai",
+        };
+    }
   },
 
   handleMediaAction: async (text: string) => {
