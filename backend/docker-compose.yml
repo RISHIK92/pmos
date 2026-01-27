@@ -30,6 +30,15 @@ services:
     volumes:
       - redisdata:/data
 
+  chroma:
+    image: chromadb/chroma
+    restart: always
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/data
+
 volumes:
   pgdata:
   redisdata:
+  chroma_data:

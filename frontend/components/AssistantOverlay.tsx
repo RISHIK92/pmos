@@ -145,7 +145,6 @@ export default function AssistantOverlay() {
         body: JSON.stringify({ query: queryText }),
       });
       const data = await res.json();
-      console.log("🔍 Query Response Data:", data);
 
       setIsProcessingText(false);
 
@@ -163,38 +162,6 @@ export default function AssistantOverlay() {
           return;
         }
         setResponse(responseText);
-
-        // Play audio if available
-        if (data.audio) {
-          const audioUrl = `${backendUrl}${data.audio}`;
-          console.log("🔊 Generating Audio URL:", audioUrl);
-
-          try {
-            await Audio.setAudioModeAsync({
-              allowsRecordingIOS: false,
-              playsInSilentModeIOS: true,
-              staysActiveInBackground: true,
-              shouldDuckAndroid: true,
-              playThroughEarpieceAndroid: false,
-            });
-
-            const { sound, status } = await Audio.Sound.createAsync(
-              { uri: audioUrl },
-              { shouldPlay: true },
-            );
-
-            console.log("🔊 Sound Loaded:", status.isLoaded);
-            if (status.isLoaded) {
-              console.log("🔊 Duration:", status.durationMillis);
-              // Force play just in case
-              await sound.playAsync();
-            } else {
-              console.error("🔊 Sound failed to load:", status);
-            }
-          } catch (e) {
-            console.error("🔊 Failed to play audio exception:", e);
-          }
-        }
       } else if (data) {
         setResponse(JSON.stringify(data));
       }
@@ -219,34 +186,11 @@ export default function AssistantOverlay() {
 
     // 1. Delegate to IntentHandler
     const result = await IntentHandler.process(cleanText);
-    console.log("🧠 Intent Result:", result);
 
     // 3. Handle Success
     if (result.success) {
       setIsProcessingText(false);
       setResponse(result.message);
-
-      // Play audio if available in IntentResult
-      if (result.audio) {
-        const audioUrl = `http://10.138.197.129:8000${result.audio}`;
-        console.log("🔊 Playing Intent Audio:", audioUrl);
-        try {
-          await Audio.setAudioModeAsync({
-            allowsRecordingIOS: false,
-            playsInSilentModeIOS: true,
-            staysActiveInBackground: true,
-            shouldDuckAndroid: true,
-            playThroughEarpieceAndroid: false,
-          });
-
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: audioUrl },
-            { shouldPlay: true },
-          );
-        } catch (e) {
-          console.error("Failed to play intent audio", e);
-        }
-      }
 
       // Special case: If it was a system toggle, we might not want to dismiss immediately?
       // But IntentHandler says 'shouldDismiss'.
@@ -291,11 +235,8 @@ export default function AssistantOverlay() {
       }
 
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
+        allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
       });
 
       // Reset stats
@@ -401,7 +342,6 @@ export default function AssistantOverlay() {
             headers: {},
           });
           const result = await response.json();
-          console.log("🎤 Voice Response:", result);
           setIsProcessingVoice(false);
 
           if (result) {

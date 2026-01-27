@@ -28,7 +28,6 @@ export interface IntentResult {
     | "ai"
     | "flashlight_on"
     | "flashlight_off";
-  audio?: string;
 }
 
 export const IntentHandler = {
@@ -306,7 +305,6 @@ export const IntentHandler = {
         message: data.response || data.content || JSON.stringify(data),
         shouldDismiss: false,
         type: "ai",
-        audio: data.audio, // Pass audio through
       };
     } catch (error) {
       console.error("Server request failed:", error);

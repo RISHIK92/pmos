@@ -5,7 +5,6 @@ from core.lifespan import db
 import os
 from pathlib import Path
 from services.transcribe import voice_to_text
-from services.speech import text_to_speech
 from app.query.schema import QueryRequest
 from app.agents.master_agent import app as master_agent
 from app.agents.tools import CLIENT_TOOL_NAMES
@@ -70,23 +69,10 @@ class QueryService:
         
         # Normal text response
         ai_text = ai_response.content
-        print(ai_text, "agd")
         
-        # Generate Audio
-        audio_url = None
-        try:
-            # We use an absolute-like path that matches the mounted static route
-            # text_to_speech returns "static/audio/file.wav"
-            # We want "/static/audio/file.wav"
-            audio_path = text_to_speech(ai_text)
-            audio_url = "/" + audio_path
-        except Exception as e:
-            print(f"TTS Failed: {e}")
-
         result = {
             "type": "TEXT",
-            "response": ai_text,
-            "audio": audio_url
+            "response": ai_text
         }
         
         await db.conversationlog.create(

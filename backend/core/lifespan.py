@@ -3,15 +3,17 @@ from contextlib import asynccontextmanager
 from prisma import Prisma
 from redis.asyncio import Redis
 from .firebase import initialize_firebase
+import chromadb
 
 db = Prisma()
 redis = Redis(host=os.getenv("REDIS_HOST", "localhost"), port=int(os.getenv("REDIS_PORT", 6379)), db=0, password=os.getenv("REDIS_PASSWORD"), decode_responses=True)
+chroma_client = chromadb.HttpClient(host='localhost', port=8001)
 
 @asynccontextmanager
 async def lifespan(app):
     """
     Lifespan context manager for FastAPI
-    Connects to DB and initializes Firebase on startup
+    Connects to DB, Redis, Chromadb and initializes Firebase on startup
     """
     await db.connect()
     print("✅ Database connected")
@@ -19,7 +21,15 @@ async def lifespan(app):
     await redis.ping()
     print("✅ Redis connected")
     
+    try:
+        chroma_client.heartbeat()
+        print(f"✅ ChromaDB connected")
+    except Exception as e:
+        print(f"❌ ChromaDB failed. Error: {e}")
+        
     initialize_firebase()
+    print("✅ Firebase initialized")
+
     
     yield
     
