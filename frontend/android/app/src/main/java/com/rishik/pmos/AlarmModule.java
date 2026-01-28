@@ -12,8 +12,10 @@ import android.util.Log;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.ReadableArray;
 
-// Import AlarmClock for intents
+import java.util.ArrayList;
+
 import android.provider.AlarmClock;
 
 public class AlarmModule extends ReactContextBaseJavaModule {
@@ -32,6 +34,8 @@ public class AlarmModule extends ReactContextBaseJavaModule {
     public String getName() {
         return "AlarmModule";
     }
+
+    // ... (Keep existing scheduleCriticalAlarm, getLaunchDetails, and stopAlarm methods exactly as they are) ...
 
     @ReactMethod
     public void scheduleCriticalAlarm(String title, double timestampMs) {
@@ -52,8 +56,6 @@ public class AlarmModule extends ReactContextBaseJavaModule {
             Intent intent = new Intent(context, AlarmReceiver.class);
             intent.putExtra("title", title);
             
-            // Unique ID based on timestamp to allow multiple alarms, or constant ID to replace
-            // For now using constant ID 1001 for the critical alarm
             int requestCode = 1001; 
             
             PendingIntent pendingIntent = PendingIntent.getBroadcast(
@@ -109,11 +111,8 @@ public class AlarmModule extends ReactContextBaseJavaModule {
             } finally {
                 currentRingtone = null;
             }
-        } else {
-            Log.d(TAG, "No active alarm to stop");
         }
 
-        // Also clear the intent so it doesn't re-trigger on app reload/foreground
         try {
             if (getCurrentActivity() != null) {
                 Intent intent = getCurrentActivity().getIntent();
@@ -128,8 +127,9 @@ public class AlarmModule extends ReactContextBaseJavaModule {
         }
     }
 
+    // ✅ UPDATED METHOD: Accepts 'days' argument
     @ReactMethod
-    public void setAlarm(int hour, int minute) {
+    public void setAlarm(int hour, int minute, ReadableArray days) {
         try {
             Intent intent = new Intent(AlarmClock.ACTION_SET_ALARM);
             intent.putExtra(AlarmClock.EXTRA_HOUR, hour);
@@ -137,6 +137,16 @@ public class AlarmModule extends ReactContextBaseJavaModule {
             intent.putExtra(AlarmClock.EXTRA_MESSAGE, "Set by PMOS");
             intent.putExtra(AlarmClock.EXTRA_SKIP_UI, true);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            // Handle Repeat Days
+            if (days != null && days.size() > 0) {
+                ArrayList<Integer> daysList = new ArrayList<>();
+                for (int i = 0; i < days.size(); i++) {
+                    daysList.add(days.getInt(i));
+                }
+                intent.putExtra(AlarmClock.EXTRA_DAYS, daysList);
+                Log.d(TAG, "🔄 Setting repeating alarm for days: " + daysList.toString());
+            }
             
             if (intent.resolveActivity(getReactApplicationContext().getPackageManager()) != null) {
                 getReactApplicationContext().startActivity(intent);

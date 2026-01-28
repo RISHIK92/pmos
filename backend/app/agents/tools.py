@@ -2,13 +2,14 @@ from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from typing import Optional, Literal, List
 from core.lifespan import db
+from app.services.memory_store import memory_store
 from datetime import datetime
-
 
 try:
     from pydantic.v1 import BaseModel, Field
 except ImportError:
     from pydantic import BaseModel, Field
+    
 # ============================================
 # CLIENT TOOLS (Executed on phone)
 # ============================================
@@ -43,7 +44,10 @@ class SleepTrackingArgs(BaseModel):
 
 class ScheduleCriticalMemoryArgs(BaseModel):
     title: str = Field(description="Title of the reminder")
-    timestamp: int = Field(description="Unix timestamp (in milliseconds) when the alarm should ring")
+    timestamp: int = Field(description="Unix timestamp (in milliseconds) when the critical alarm should ring same as save memory due date and time")
+
+class SearchMemoryArgs(BaseModel):
+    query: str = Field(description="Query to search for in memory")
 
 @tool(args_schema=CallContactArgs)
 def client_call_contact(name: str) -> str:
@@ -171,9 +175,15 @@ class SaveMemoryArgs(BaseModel):
     title: str = Field(description="Title of the memory/note")
     content: str = Field(description="Content of the memory")
     tags: Optional[str] = Field(default=None, description="Comma-separated tags")
+    repeat_pattern: Optional[str] = Field(default=None, description="Repeat pattern (e.g. 'daily', 'weekly', 'monthly')")
     is_critical: Optional[bool] = Field(default=False, description="Set to true if this is critical/important information")
     due_date: Optional[str] = Field(default=None, description="Reminder date (YYYY-MM-DD)")
     due_time: Optional[str] = Field(default=None, description="Reminder time (HH:MM)")
+    category: Optional[str] = Field(default="personal", description="Category (e.g. 'coding', 'health', 'personal', 'work')")
+
+class GetContextArgs(BaseModel):
+    query: str = Field(description="The query to search context for. Be specific.")
+    limit: Optional[int] = Field(default=5, description="Number of results to return")
 
 # --- Accounts ---
 class CreateAccountArgs(BaseModel):
@@ -595,14 +605,16 @@ async def get_memories(config: RunnableConfig) -> str:
     
     return "\n".join(result)
 
+
+
 @tool(args_schema=SaveMemoryArgs)
-async def save_memory(title: str, content: str, tags: Optional[str] = None, is_critical: Optional[bool] = False, due_date: Optional[str] = None, due_time: Optional[str] = None, *, config: RunnableConfig) -> str:
+async def save_memory(title: str, content: str, tags: Optional[str] = None, repeat_pattern: Optional[str] = None, is_critical: Optional[bool] = False, due_date: Optional[str] = None, due_time: Optional[str] = None, *, config: RunnableConfig) -> str:
     """
     Store information, habits, or critical health reminders.
     
     IMPORTANT RULE: 
     If 'is_critical' is True AND a specific time is provided (reminder_time), 
-    you MUST ALSO call the 'client_schedule_critical_memory' tool to ring the phone.
+    you SHOULD call the 'client_schedule_critical_memory' tool to ring the phone.
     """
     user_id = get_user_id(config)
     if not user_id: return "❌ Error: User not found."
@@ -617,6 +629,7 @@ async def save_memory(title: str, content: str, tags: Optional[str] = None, is_c
             "title": title,
             "content": content,
             "tags": tags_list,
+            "repeatPattern": repeat_pattern,
             "isCritical": is_critical or False,
             "reminderDate": due_date,
             "reminderTime": due_time
@@ -907,7 +920,7 @@ async def add_content(type: str, title: str, subtitle: Optional[str] = None, pla
             "subtitle": subtitle,
             "platform": platform,
             "url": url,
-            "image": "https://placehold.co/100" # Default placeholder
+            "image": "https://placehold.co/100"
         }
     )
     return f"✅ Added to {type} list: {title}"
@@ -916,6 +929,39 @@ async def add_content(type: str, title: str, subtitle: Optional[str] = None, pla
 def transfer_to_search(query: str) -> str:
     """Use this tool when you need to search the web for real-time information. This will transfer control to a specialized search agent."""
     return "SEARCH_ROUTING"
+
+@tool(args_schema=SearchMemoryArgs)
+async def search_memory(query: str, config: RunnableConfig) -> str:
+    """
+    Search for specific facts, past conversations, or personal details stored in memory.
+    Answer using this context, DO NOT JUST respond with thanks for the context and answer only based on the user query not the whole context
+    Use this to answer questions like:
+    - "Who is [Name]?"
+    - "What did I work on last week?"
+    - "What is my preference for [Topic]?"
+    - "Where did I leave my keys?"
+    """
+    try:
+        user_id = get_user_id(config)
+        print(f"🧠 [Tool] Searching memory for: '{query}' (User: {user_id})")
+        
+        results = await memory_store.search(query=query, user_id=user_id, limit=5)
+        if not results:
+            return "No relevant memories found."
+            
+        formatted_response = "Found the following memories:\n"
+        for item in results:
+            date_str = ""
+            if "created_at" in item["metadata"]:
+                date_str = f" [Timestamp: {item['metadata']['created_at']}]"
+            
+            formatted_response += f"- {item['text']}{date_str}\n"
+            
+        formatted_response += "\nINSTRUCTION: Use the facts above to answer the user's question directly."
+            
+        return formatted_response
+    except Exception as e:
+        return f"Error searching memory: {str(e)}"
 
 
 # ============================================
@@ -946,6 +992,7 @@ SERVER_TOOLS = [
     # Accounts
     get_accounts,
     create_account,
+    search_memory,
     update_account,
     # Dev
     get_dev_profile,

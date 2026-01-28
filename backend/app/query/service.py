@@ -18,10 +18,7 @@ class QueryService:
 
     async def query(self, query: QueryRequest, user: dict):
         uid = user["uid"]
-        print(query.timestamp)
         
-        found_docs = ["User put keys on the kitchen counter yesterday."]
-
         profile_str = "Name: Rishik, Role: Developer, Location: India"
         if query.timestamp:
             profile_str += f"\nUser Local Time: {query.timestamp}"
@@ -44,13 +41,13 @@ class QueryService:
             {
                 "messages": messages_list,
                 "user_profile": profile_str,
-                "vector_context": found_docs
             },
             config={"configurable": {"user_id": uid}}
         )
         
         ai_response = response['messages'][-1]
         print(ai_response)
+        print(ai_response.tool_calls)
         
         if hasattr(ai_response, 'tool_calls') and ai_response.tool_calls:
             tool_call = ai_response.tool_calls[0]
