@@ -9,6 +9,9 @@ from app.query.schema import QueryRequest
 from app.agents.master_agent import app as master_agent
 from app.agents.tools import CLIENT_TOOL_NAMES
 from langchain_core.messages import HumanMessage, AIMessage
+from app.chains.summarizer import summarize_and_store
+from app.chains.enricher import enrich_query
+import asyncio
 
 class QueryService:
     def __init__(self):
@@ -35,7 +38,10 @@ class QueryService:
             messages_list.append(AIMessage(content=log.aiResponse))
         
         # Add the current query
-        messages_list.append(HumanMessage(content=query.query))
+
+        search_query = await enrich_query(query.query, messages_list)
+
+        messages_list.append(HumanMessage(content=search_query))
 
         response = await master_agent.ainvoke(
             {
@@ -78,6 +84,9 @@ class QueryService:
                 "aiResponse": ai_text,
                 "userId": uid
             }
+        )
+        asyncio.create_task(
+            summarize_and_store(query.query, ai_text, uid)
         )
         return result
 
