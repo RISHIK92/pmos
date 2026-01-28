@@ -9,8 +9,6 @@ from services.tool_registry import tool_retriever
 from groq import AsyncGroq
 import os
 
-os.environ["GOOGLE_API_KEY"] = "AIzaSyANqmfskoZg8yL441iYu-4PYeJGzsDUJuU"
-
 llm = ChatGroq(
     model="moonshotai/kimi-k2-instruct-0905",
     api_key=os.getenv("GROQ_API_KEY"),
