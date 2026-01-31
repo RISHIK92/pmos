@@ -55,11 +55,6 @@ async def chat_node(state: AgentState):
             relevant_tools.append(tool_retriever.tool_map["transfer_to_search"])
             print("➕ Auto-injected 'transfer_to_search' for global search availability.")
 
-        # Always inject Context capability
-        if "search_memory" in tool_retriever.tool_map and "search_memory" not in current_names:
-            relevant_tools.append(tool_retriever.tool_map["search_memory"])
-            print("➕ Auto-injected 'search_memory' for context awareness.")
-
         print(f"🔎 Final Tools: {[t.name for t in relevant_tools]}")
         llm_with_tools = llm.bind_tools(relevant_tools)
     else:

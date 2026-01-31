@@ -4,6 +4,7 @@ from typing import Optional, Literal, List
 from core.lifespan import db
 from app.services.memory_store import memory_store
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 try:
     from pydantic.v1 import BaseModel, Field
@@ -179,7 +180,6 @@ class SaveMemoryArgs(BaseModel):
     is_critical: Optional[bool] = Field(default=False, description="Set to true if this is critical/important information")
     due_date: Optional[str] = Field(default=None, description="Reminder date (YYYY-MM-DD)")
     due_time: Optional[str] = Field(default=None, description="Reminder time (HH:MM)")
-    category: Optional[str] = Field(default="personal", description="Category (e.g. 'coding', 'health', 'personal', 'work')")
 
 class GetContextArgs(BaseModel):
     query: str = Field(description="The query to search context for. Be specific.")
@@ -610,7 +610,7 @@ async def get_memories(config: RunnableConfig) -> str:
 @tool(args_schema=SaveMemoryArgs)
 async def save_memory(title: str, content: str, tags: Optional[str] = None, repeat_pattern: Optional[str] = None, is_critical: Optional[bool] = False, due_date: Optional[str] = None, due_time: Optional[str] = None, *, config: RunnableConfig) -> str:
     """
-    Store information, habits, or critical health reminders.
+    Store information, habits, or critical health reminders like tablets or crucial reminders.
     
     IMPORTANT RULE: 
     If 'is_critical' is True AND a specific time is provided (reminder_time), 
@@ -637,7 +637,26 @@ async def save_memory(title: str, content: str, tags: Optional[str] = None, repe
     )
     
     reminder_str = f" (Reminder: {due_date} {due_time})" if due_date or due_time else ""
-    return f"🧠 Saved: '{title}'" + (" (Critical!)" if is_critical else "") + reminder_str
+    
+    # Calculate IST timestamp if critical and time is provided
+    timestamp_instruction = ""
+    if is_critical and due_time:
+        try:
+            ist = ZoneInfo("Asia/Kolkata")
+            # Default to today if no date provided
+            date_str = due_date if due_date else datetime.now(ist).strftime("%Y-%m-%d")
+            
+            dt_str = f"{date_str} {due_time}"
+            dt_obj = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+            dt_obj = dt_obj.replace(tzinfo=ist)
+            
+            # Convert to milliseconds timestamp
+            ts_ms = int(dt_obj.timestamp() * 1000)
+            timestamp_instruction = f" (Use Timestamp: {ts_ms} for alarm)"
+        except Exception as e:
+            print(f"Error parsing date/time for timestamp: {e}")
+            
+    return f"🧠 Saved: '{title}'" + (" (Critical!)" if is_critical else "") + reminder_str + timestamp_instruction
 
 
 # ============================================
