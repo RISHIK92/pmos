@@ -133,7 +133,7 @@ export default function RestrictorScreen() {
 
   const backendUrl =
     Platform.OS === "android"
-      ? "http://10.138.197.129:8000"
+      ? "http://10.7.19.2:8000"
       : "http://localhost:8000";
 
   const fetchHistory = async () => {

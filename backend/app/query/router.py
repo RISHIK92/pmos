@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File
+from fastapi.responses import StreamingResponse
 from fastapi.param_functions import Depends
 from common.security import verify_token
 from app.query.controller import QueryContoller
@@ -10,8 +11,8 @@ controller = QueryContoller()
 
 @router.post("/query")
 async def query(query: QueryRequest, user: dict = Depends(verify_token)):
-    response = await controller.query(query, user)
-    return response
+    stream = await controller.query_stream(query, user)
+    return StreamingResponse(stream, media_type="text/event-stream")
 
 @router.post("/voice")
 async def voice_query(file: UploadFile = File(...)):

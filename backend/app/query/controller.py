@@ -9,6 +9,9 @@ class QueryContoller:
         response = await service.query(query, user)
         return response
     
+    async def query_stream(self, query: QueryRequest, user: dict):
+        return service.query_stream(query, user)
+    
     async def voice_query(self, file: UploadFile):
         temp_path = await service.save_query(file)
 

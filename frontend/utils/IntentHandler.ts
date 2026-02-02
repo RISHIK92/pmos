@@ -10,6 +10,7 @@ import { SleepManager } from "./SleepManager";
 // @ts-ignore
 import RNImmediatePhoneCall from "react-native-immediate-phone-call";
 import { auth } from "../lib/firebase";
+import EventSource from "react-native-sse";
 
 export interface IntentResult {
   success: boolean;
@@ -258,63 +259,100 @@ export const IntentHandler = {
       };
     }
 
-    // 10. AI Fallback - Ask Server with Ghost Tools
-    console.log("🤖 Regex failed, asking Server with Ghost Tools...");
-    return await IntentHandler.askServerWithTools(cleanText);
+    // 10. AI Fallback - Defer to Caller for Streaming
+    console.log("🤖 Regex failed, defaulting to AI...");
+    return {
+      success: false,
+      message: "",
+      shouldDismiss: false,
+      type: "ai",
+    };
   },
 
-  // New method: Ask server and handle CLIENT_ACTION responses
+  // Kept for reference or non-streaming usage
   askServerWithTools: async (text: string): Promise<IntentResult> => {
     const backendUrl =
       Platform.OS === "android"
-        ? "http://10.138.197.129:8000"
+        ? "http://10.7.19.2:8000"
         : "http://localhost:8000";
 
-    try {
-      // Get auth token if available
-      const user = auth.currentUser;
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
+    return new Promise(async (resolve, reject) => {
+      try {
+        const user = auth.currentUser;
+        let token = "";
+        if (user) {
+          token = await user.getIdToken();
+        }
 
-      if (user) {
-        const token = await user.getIdToken();
-        headers["Authorization"] = `Bearer ${token}`;
+        // @ts-ignore
+        const es = new EventSource(`${backendUrl}/query/query`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            query: text,
+            timestamp: new Date().toString(),
+          }),
+        });
+
+        // @ts-ignore
+        es.addEventListener("message", (event: any) => {
+          if (!event.data) return;
+          try {
+            const data = JSON.parse(event.data);
+
+            if (data.type === "CLIENT_ACTION") {
+              console.log(
+                "📱 Received CLIENT_ACTION via IntentHandler:",
+                data.action,
+              );
+              es.close();
+              // Execute and resolve
+              IntentHandler.handleClientAction(data.action, data.data).then(
+                resolve,
+              );
+            } else if (data.type === "response") {
+              console.log("🤖 Received Final Response via IntentHandler");
+              es.close();
+              resolve({
+                success: true,
+                message: data.response,
+                shouldDismiss: false,
+                type: "ai",
+              });
+            }
+            // Ignore status/tool events for this "hidden" handler usage,
+            // or log them if needed.
+          } catch (e) {
+            console.error("Error parsing SSE in IntentHandler", e);
+          }
+        });
+
+        // @ts-ignore
+        es.addEventListener("error", (event: any) => {
+          console.error("SSE Error in IntentHandler:", event);
+          es.close();
+          if (event.type === "error" || event.message) {
+            resolve({
+              success: false,
+              message: "Connection failed.",
+              shouldDismiss: false,
+              type: "ai",
+            });
+          }
+        });
+      } catch (error) {
+        console.error("Server request failed:", error);
+        resolve({
+          success: false,
+          message: "Unable to reach server.",
+          shouldDismiss: false,
+          type: "ai",
+        });
       }
-
-      const response = await fetch(`${backendUrl}/query/query`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          query: text,
-          timestamp: new Date().toString(),
-        }),
-      });
-
-      const data = await response.json();
-
-      // Handle CLIENT_ACTION from server
-      if (data.type === "CLIENT_ACTION") {
-        console.log("📱 Received CLIENT_ACTION:", data.action, data.data);
-        return await IntentHandler.handleClientAction(data.action, data.data);
-      }
-
-      // Normal TEXT response
-      return {
-        success: true,
-        message: data.response || data.content || JSON.stringify(data),
-        shouldDismiss: false,
-        type: "ai",
-      };
-    } catch (error) {
-      console.error("Server request failed:", error);
-      return {
-        success: false,
-        message: "Unable to reach server. Try again later.",
-        shouldDismiss: false,
-        type: "ai",
-      };
-    }
+    });
   },
 
   // Handle CLIENT_ACTION from server

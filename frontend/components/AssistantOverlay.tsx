@@ -2,7 +2,9 @@ import React, { useEffect, useState, useRef } from "react";
 import AppLauncher from "../utils/AppLauncher";
 import ContactManager from "../utils/ContactManager";
 import { IntentHandler } from "../utils/IntentHandler";
+import EventSource from "react-native-sse";
 import Markdown from "react-native-markdown-display";
+import { ThinkingBubble } from "@/components/ThinkingBubble";
 import {
   View,
   Text,
@@ -50,6 +52,7 @@ export default function AssistantOverlay() {
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [isProcessingText, setIsProcessingText] = useState(false);
   const [response, setResponse] = useState<string | null>(null);
+  const [thinkingStatus, setThinkingStatus] = useState<string | null>(null);
   const [lastUserQuery, setLastUserQuery] = useState<string | null>(null);
   const [isTorchOn, setIsTorchOn] = useState(false);
   const router = useRouter();
@@ -106,14 +109,13 @@ export default function AssistantOverlay() {
     }
   }, [isListening]);
 
-  // Process Query Logic
+  // Process Query Logic (SSE)
   const processQuery = async (queryText: string) => {
     if (!queryText.trim()) return;
 
     // Check if user is signed in
     const user = auth.currentUser;
     if (!user) {
-      // Not signed in, redirect to home
       if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
       if (recordingRef.current) {
         recordingRef.current.stopAndUnloadAsync().catch(console.error);
@@ -125,50 +127,99 @@ export default function AssistantOverlay() {
     }
 
     setInputText("");
-    setResponse(null);
+    setResponse(""); // Clear previous response
     setIsProcessingText(true);
 
     const backendUrl =
       Platform.OS === "android"
-        ? "http://10.138.197.129:8000"
+        ? "http://10.7.19.2:8000"
         : "http://localhost:8000";
 
     try {
       const token = await user.getIdToken();
 
-      const res = await fetch(`${backendUrl}/query/query`, {
+      // @ts-ignore
+      const es = new EventSource(`${backendUrl}/query/query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ query: queryText }),
+        body: JSON.stringify({
+          query: queryText,
+          timestamp: new Date().toString(),
+        }),
       });
-      const data = await res.json();
 
-      setIsProcessingText(false);
+      // @ts-ignore
+      es.addEventListener("open", () => {
+        console.log("SSE Connection Opened");
+      });
 
-      if (data && data.response) {
-        const responseText = data.response;
-        // If response is long, redirect to home for better viewing
-        if (responseText.length > 300) {
-          if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
-          if (recordingRef.current) {
-            recordingRef.current.stopAndUnloadAsync().catch(console.error);
-            recordingRef.current = null;
+      // @ts-ignore
+      es.addEventListener("message", (event: any) => {
+        if (!event.data) return;
+
+        try {
+          const data = JSON.parse(event.data);
+
+          switch (data.type) {
+            case "status":
+              setThinkingStatus(data.content);
+              break;
+
+            case "tool_start":
+              setThinkingStatus(`Using ${data.tool}...`);
+              break;
+
+            case "tool_end":
+              // Keep showing previous tool status until next event
+              break;
+
+            case "response":
+              setIsProcessingText(false);
+              setThinkingStatus(null);
+              setResponse(data.response);
+              es.close();
+              break;
+
+            case "CLIENT_ACTION":
+              setIsProcessingText(false);
+              es.close();
+              setThinkingStatus(`Executing ${data.action}...`);
+              handleClientHandler(data.action, data.data);
+              // Note: handleClientHandler sets response, but we might want to clear thinking?
+              // handleClientHandler inside sets response
+              setThinkingStatus(null);
+              break;
           }
-          setVisible(false);
-          router.replace("/(tabs)/home");
-          return;
+        } catch (e) {
+          console.error("Error parsing SSE data", e);
         }
-        setResponse(responseText);
-      } else if (data) {
-        setResponse(JSON.stringify(data));
-      }
+      });
+
+      // @ts-ignore
+      es.addEventListener("error", (event: any) => {
+        console.error("SSE Error:", event);
+        setIsProcessingText(false);
+        if (event.type === "error" || event.message) {
+          // connection error
+          setResponse((prev) => prev + "\n❌ Connection failed.");
+        }
+        es.close();
+      });
     } catch (error) {
-      console.error("Failed to process query", error);
+      console.error("Failed to start SSE", error);
       setIsProcessingText(false);
-      setResponse("Failed to get response. Please try again.");
+      setResponse("Failed to start connection.");
+    }
+  };
+
+  const handleClientHandler = async (action: string, data: any) => {
+    const result = await IntentHandler.handleClientAction(action, data);
+    setResponse(result.message);
+    if (result.shouldDismiss) {
+      setTimeout(() => handleDismiss(), 2000);
     }
   };
 
@@ -332,7 +383,7 @@ export default function AssistantOverlay() {
 
         const backendUrl =
           Platform.OS === "android"
-            ? "http://10.138.197.129:8000"
+            ? "http://10.7.19.2:8000"
             : "http://localhost:8000";
 
         try {
@@ -421,6 +472,7 @@ export default function AssistantOverlay() {
             isProcessingVoice={isProcessingVoice}
             isProcessingText={isProcessingText}
             response={response}
+            thinkingStatus={thinkingStatus}
             lastUserQuery={lastUserQuery}
           />
         </View>
@@ -447,6 +499,7 @@ const OverlayContent = ({
   isProcessingVoice,
   isProcessingText,
   response,
+  thinkingStatus,
   lastUserQuery,
 }: any) => {
   const showSend = inputText.length > 0;
@@ -476,22 +529,20 @@ const OverlayContent = ({
           )}
 
           {/* AI Response (Left) */}
-          {(isProcessingText || response) && (
+          {(isProcessingText || response || thinkingStatus) && (
             <View style={styles.aiBubbleContainer}>
-              <View style={styles.aiIcon}>
-                <Ionicons
-                  name={isProcessingText ? "sparkles" : "radio-button-on"}
-                  size={14}
-                  color="#FFF"
-                />
-              </View>
-              <View style={styles.aiBubble}>
-                {isProcessingText ? (
-                  <Text style={styles.processingDot}>• • •</Text>
-                ) : (
-                  <Markdown style={markdownStyles}>{response}</Markdown>
-                )}
-              </View>
+              {thinkingStatus ? (
+                <ThinkingBubble status={thinkingStatus} />
+              ) : (
+                <>
+                  <View style={styles.aiIcon}>
+                    <Ionicons name="radio-button-on" size={14} color="#FFF" />
+                  </View>
+                  <View style={styles.aiBubble}>
+                    <Markdown style={markdownStyles}>{response || ""}</Markdown>
+                  </View>
+                </>
+              )}
             </View>
           )}
         </ScrollView>

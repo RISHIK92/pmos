@@ -56,9 +56,9 @@ async def chat_node(state: AgentState):
             print("➕ Auto-injected 'transfer_to_search' for global search availability.")
 
         print(f"🔎 Final Tools: {[t.name for t in relevant_tools]}")
-        llm_with_tools = llm.bind_tools(relevant_tools)
+        llm_with_tools = llm.bind_tools(relevant_tools, tool_choice="auto")
     else:
-        llm_with_tools = llm.bind_tools(ALL_TOOLS)
+        llm_with_tools = llm.bind_tools(ALL_TOOLS, tool_choice="auto")
 
 
     memory_str = "\n".join([f"- {m}" for m in memories]) if memories else "No relevant memories."
@@ -159,19 +159,22 @@ def should_continue(state: AgentState):
     messages = state["messages"]
     last_message = messages[-1]
     
-    # If LLM made tool calls, check what kind
-    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        tool_name = last_message.tool_calls[0]["name"]
+    if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
+        return "end"
+    
+    tool_calls = last_message.tool_calls
+    
+    if any(tc["name"] == "transfer_to_search" for tc in tool_calls):
+        return "search"
+
+    has_server_tools = any(tc["name"] in SERVER_TOOL_NAMES for tc in tool_calls)
+    has_client_tools = any(tc["name"] in CLIENT_TOOL_NAMES for tc in tool_calls)
+
+    if has_server_tools:
+        return "tools"
         
-        # Client tools - stop here, return to service
-        if tool_name in CLIENT_TOOL_NAMES:
-            return "end"
-        
-        # Server tools - execute them
-        if tool_name in SERVER_TOOL_NAMES:
-            if tool_name == "transfer_to_search":
-                return "search"
-            return "tools"
+    if has_client_tools:
+        return "end"
     
     return "end"
 

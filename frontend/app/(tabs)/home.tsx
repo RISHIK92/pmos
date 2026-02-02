@@ -36,6 +36,8 @@ import { WaveformIcon } from "@/components/ui/WaveformIcon";
 import { FCMManager } from "../../utils/FCMManager";
 import { IntentHandler } from "../../utils/IntentHandler";
 import Markdown from "react-native-markdown-display";
+import EventSource from "react-native-sse";
+import { ThinkingBubble } from "@/components/ThinkingBubble";
 
 const { width } = Dimensions.get("window");
 
@@ -45,6 +47,7 @@ type Message = {
   sender: "user" | "system";
   timestamp: string;
   sources?: string[];
+  isThinking?: boolean;
 };
 
 const INITIAL_NOTIFICATIONS = [
@@ -124,7 +127,7 @@ export default function ChatScreen() {
 
           const backendUrl =
             Platform.OS === "android"
-              ? "http://10.138.197.129:8000"
+              ? "http://10.7.19.2:8000"
               : "http://localhost:8000";
 
           const data = await fetch(`${backendUrl}/auth/register`, {
@@ -150,7 +153,7 @@ export default function ChatScreen() {
       setLoadingHistory(true);
       const backendUrl =
         Platform.OS === "android"
-          ? "http://10.138.197.129:8000"
+          ? "http://10.7.19.2:8000"
           : "http://localhost:8000";
       let url = `${backendUrl}/query/history?limit=7`;
       if (cursor) url += `&cursor=${cursor}`;
@@ -272,7 +275,7 @@ export default function ChatScreen() {
 
         const backendUrl =
           Platform.OS === "android"
-            ? "http://10.138.197.129:8000"
+            ? "http://10.7.19.2:8000"
             : "http://localhost:8000";
 
         const response = await fetch(`${backendUrl}/query/voice`, {
@@ -346,10 +349,28 @@ export default function ChatScreen() {
       const token = await user.getIdToken();
       const backendUrl =
         Platform.OS === "android"
-          ? "http://10.138.197.129:8000"
+          ? "http://10.7.19.2:8000"
           : "http://localhost:8000";
-      console.log("Sending query with time:", new Date().toString());
-      const apiResponse = await fetch(`${backendUrl}/query/query`, {
+
+      console.log("Sending query (SSE) with time:", new Date().toString());
+
+      // Create a placeholder message for the AI response
+      const responseId = (Date.now() + 1).toString();
+      const initialResponse: Message = {
+        id: responseId,
+        text: "Thinking...",
+        sender: "system",
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        isThinking: true, // Start in thinking mode
+        sources: ["PMOS Intelligence"],
+      };
+      setMessages((prev) => [...prev, initialResponse]);
+
+      // @ts-ignore
+      const es = new EventSource(`${backendUrl}/query/query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -361,24 +382,96 @@ export default function ChatScreen() {
         }),
       });
 
-      const result = await apiResponse.json();
-      setIsTyping(false);
-      const response: Message = {
-        id: (Date.now() + 1).toString(),
-        text: result.response || "Sorry, I couldn't process your request.",
-        sender: "system",
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        sources: ["PMOS Intelligence"],
+      // Helper to update the last message text and state
+      const updateLastMessage = (
+        updater: (prevText: string) => string,
+        finished: boolean = false,
+      ) => {
+        setMessages((currentMessages) => {
+          const newMessages = [...currentMessages];
+          const targetIndex = newMessages.findIndex((m) => m.id === responseId);
+          if (targetIndex !== -1) {
+            newMessages[targetIndex] = {
+              ...newMessages[targetIndex],
+              text: updater(newMessages[targetIndex].text),
+              isThinking: !finished,
+            };
+          }
+          return newMessages;
+        });
       };
-      setMessages((prev) => [...prev, response]);
+
+      // @ts-ignore
+      es.addEventListener("open", () => {
+        console.log("SSE Connection Opened");
+      });
+
+      // @ts-ignore
+      es.addEventListener("message", (event: any) => {
+        if (!event.data) return;
+
+        try {
+          const data = JSON.parse(event.data);
+
+          switch (data.type) {
+            case "status":
+              // Replace previous text entirely with new status
+              updateLastMessage(() => data.content);
+              break;
+
+            case "tool_start":
+              // Replace with tool usage
+              updateLastMessage(() => `Using ${data.tool}...`);
+              break;
+
+            case "tool_end":
+              // Optional: maybe briefly show checked? Or just wait for next.
+              // Let's just keep the "Using Tool..." until response comes.
+              break;
+
+            case "response":
+              setIsTyping(false);
+              // Switch to Markdown mode and show final text ONLY
+              updateLastMessage(() => data.response, true);
+              es.close();
+              break;
+
+            case "CLIENT_ACTION":
+              setIsTyping(false);
+              es.close();
+              updateLastMessage(() => `Executing ${data.action}...`, true); // Keep as markdown for action
+
+              // Execute locally
+              IntentHandler.handleClientAction(data.action, data.data).then(
+                (res) => {
+                  // Append result to the action log
+                  updateLastMessage(
+                    (prev) => prev + "\n\n" + res.message,
+                    true,
+                  );
+                },
+              );
+              break;
+          }
+        } catch (e) {
+          console.error("Error parsing SSE data", e);
+        }
+      });
+
+      // @ts-ignore
+      es.addEventListener("error", (event: any) => {
+        console.error("SSE Error:", event);
+        setIsTyping(false);
+        if (event.type === "error" || event.message) {
+          updateLastMessage((prev) => prev + "\n❌ Connection failed.");
+        }
+        es.close();
+      });
     } catch (error) {
       console.error("Failed to send message", error);
       setIsTyping(false);
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + 2).toString(),
         text: "Sorry, there was an error processing your request. Please try again.",
         sender: "system",
         timestamp: new Date().toLocaleTimeString([], {
@@ -403,15 +496,16 @@ export default function ChatScreen() {
     const itemIndex = index ?? 0;
 
     if (isSystem) {
+      if (item.isThinking) {
+        return (
+          <View style={{ marginLeft: 20, marginBottom: 8 }}>
+            <ThinkingBubble status={item.text} />
+          </View>
+        );
+      }
+
       return (
-        <Animated.View
-          entering={FadeInUp.delay(itemIndex * 50)
-            .springify()
-            .damping(30)
-            .stiffness(200)}
-          layout={Layout.springify().damping(30).stiffness(200)}
-          style={styles.systemContainer}
-        >
+        <View style={styles.systemContainer}>
           <View style={styles.answerRow}>
             <View style={styles.systemIcon}>
               <IconSymbol name="sparkles" size={20} color="#00B894" />
@@ -420,21 +514,14 @@ export default function ChatScreen() {
               <Markdown style={markdownStyles}>{item.text}</Markdown>
             </View>
           </View>
-        </Animated.View>
+        </View>
       );
     }
 
     return (
-      <Animated.View
-        entering={FadeInUp.delay(itemIndex * 50)
-          .springify()
-          .damping(30)
-          .stiffness(200)}
-        layout={Layout.springify().damping(30).stiffness(200)}
-        style={styles.userContainer}
-      >
+      <View style={styles.userContainer}>
         <Text style={styles.userText}>{item.text}</Text>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -510,18 +597,7 @@ export default function ChatScreen() {
               onLoginSuccess={() => setShowLoginModal(false)}
             />
           }
-          ListFooterComponent={
-            isTyping ? (
-              <View style={styles.typingWrapper}>
-                <View style={styles.systemIcon}>
-                  <IconSymbol name="sparkles" size={20} color="#00B894" />
-                </View>
-                <Text style={styles.thinkingText}>Thinking...</Text>
-              </View>
-            ) : (
-              <View style={{ height: 20 }} />
-            )
-          }
+          ListFooterComponent={<View style={{ height: 20 }} />}
         />
 
         <View style={styles.inputOuterContainer}>
