@@ -100,7 +100,7 @@ export function MobileShowcase() {
           {/* Phone Mockup Frame */}
           <div className="relative w-[340px] h-[700px] bg-black rounded-[55px] shadow-2xl border-[8px] border-gray-900 overflow-hidden ring-1 ring-black/10">
             {/* Dynamic Island */}
-            <div className="absolute top-5 left-1/2 -translate-x-1/2 w-32 h-9 bg-black rounded-full z-30 flex items-center justify-center gap-2 px-3">
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 w-32 h-9 bg-black rounded-full z-30 flex items-center justify-center gap-2 px-3">
               <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
               <div className="w-1.5 h-1.5 rounded-full bg-gray-800" />
             </div>
