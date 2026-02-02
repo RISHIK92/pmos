@@ -1,23 +1,22 @@
 import { Hero } from "../components/Hero";
-import { BentoGrid } from "../components/BentoGrid";
+import { Marquee } from "../components/Marquee";
+import { ParallaxFeatures } from "../components/ParallaxFeatures";
 import { HowItWorks } from "../components/HowItWorks";
+import { MobileShowcase } from "../components/MobileShowcase";
+import { InteractiveGlass } from "../components/InteractiveGlass";
+import { StackVisualizer } from "../components/StackVisualizer";
 import { Footer } from "../components/Footer";
-import { InteractiveDemo } from "../components/InteractiveDemo";
-import { FeatureSections } from "../components/FeatureSections";
-import { TechSpecs } from "../components/TechSpecs";
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-background overflow-hidden relative selection:bg-primary/20">
-      {/* Global decorative background elements */}
-      <div className="fixed top-0 left-0 w-full h-[500px] bg-gradient-to-br from-secondary to-transparent -z-20 opacity-50 pointer-events-none" />
-
       <Hero />
-      <InteractiveDemo />
-      <BentoGrid />
-      <FeatureSections />
+      <Marquee />
+      <MobileShowcase />
+      <InteractiveGlass />
+      <ParallaxFeatures />
       <HowItWorks />
-      <TechSpecs />
+      {/* <StackVisualizer /> */}
       <Footer />
     </main>
   );
