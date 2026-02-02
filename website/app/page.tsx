@@ -2,6 +2,9 @@ import { Hero } from "../components/Hero";
 import { BentoGrid } from "../components/BentoGrid";
 import { HowItWorks } from "../components/HowItWorks";
 import { Footer } from "../components/Footer";
+import { InteractiveDemo } from "../components/InteractiveDemo";
+import { FeatureSections } from "../components/FeatureSections";
+import { TechSpecs } from "../components/TechSpecs";
 
 export default function Home() {
   return (
@@ -10,8 +13,11 @@ export default function Home() {
       <div className="fixed top-0 left-0 w-full h-[500px] bg-gradient-to-br from-secondary to-transparent -z-20 opacity-50 pointer-events-none" />
 
       <Hero />
+      <InteractiveDemo />
       <BentoGrid />
+      <FeatureSections />
       <HowItWorks />
+      <TechSpecs />
       <Footer />
     </main>
   );
