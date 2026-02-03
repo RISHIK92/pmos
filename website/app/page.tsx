@@ -13,9 +13,9 @@ export default function Home() {
       <Hero />
       <Marquee />
       <MobileShowcase />
+      <HowItWorks />
       <InteractiveGlass />
       <ParallaxFeatures />
-      <HowItWorks />
       {/* <StackVisualizer /> */}
       <Footer />
     </main>

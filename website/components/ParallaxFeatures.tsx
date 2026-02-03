@@ -21,178 +21,233 @@ import {
   Folder,
   ArrowRight,
   Globe,
+  CheckCircle2,
 } from "lucide-react";
 
-// --- Memory Visual Component (Refined) ---
+// --- Semantic Vector Search Component ---
 function MemoryVisual() {
-  const [phase, setPhase] = useState<"idle" | "typing" | "scanning" | "found">(
-    "idle",
-  );
+  const [phase, setPhase] = useState<
+    "idle" | "typing" | "vectorizing" | "scoring" | "sorting" | "found"
+  >("idle");
   const [query, setQuery] = useState("");
-  const fullQuery = "budget for project X";
+  const fullQuery = "Project Budget";
 
-  const documents = [
+  // Documents with pre-calculated "similarity scores"
+  const initialDocs = [
     {
       id: 1,
-      type: "email",
-      icon: Mail,
-      title: "Email from Sarah",
-      date: "yesterday",
-      context: "mentioned budget",
+      title: "Review: Q3 Marketing",
+      type: "doc",
+      score: 0.12,
+      date: "2d ago",
+      color: "bg-blue-100 text-blue-600",
     },
     {
       id: 2,
-      type: "doc",
-      icon: FileText,
-      title: "Contract_v2.pdf",
-      date: "just now",
-      isTarget: true,
+      title: "Emails: Sarah (Budget)",
+      type: "mail",
+      score: 0.85,
+      date: "Yesterday",
+      color: "bg-purple-100 text-purple-600",
     },
     {
       id: 3,
-      type: "chat",
-      icon: MessageSquare,
-      title: "Slack: #marketing",
-      date: "2h ago",
-      context: "approved cost",
+      title: "Project X_Final.pdf",
+      type: "file",
+      score: 0.98,
+      date: "Just now",
+      isTarget: true,
+      color: "bg-violet-100 text-violet-600",
     },
     {
       id: 4,
-      type: "note",
-      icon: FileText,
-      title: "Meeting Notes",
-      date: "Monday",
-      context: null,
+      title: "Invoice #1024",
+      type: "file",
+      score: 0.45,
+      date: "Last week",
+      color: "bg-gray-100 text-gray-600",
+    },
+    {
+      id: 5,
+      title: "Slack: #random",
+      type: "chat",
+      score: 0.05,
+      date: "1h ago",
+      color: "bg-emerald-100 text-emerald-600",
     },
   ];
 
-  useEffect(() => {
-    let timeout: NodeJS.Timeout;
+  const [docs, setDocs] = useState(initialDocs);
 
+  useEffect(() => {
     const runSequence = async () => {
-      // Phase 1: Typing
+      // Reset
+      setDocs(initialDocs);
       setPhase("typing");
+
+      // 1. Typing
       for (let i = 0; i <= fullQuery.length; i++) {
         setQuery(fullQuery.slice(0, i));
         await new Promise((r) => setTimeout(r, 50));
       }
 
-      // Phase 2: Scanning
-      setPhase("scanning");
-      await new Promise((r) => setTimeout(r, 1500));
+      // 2. Vectorization
+      setPhase("vectorizing");
+      await new Promise((r) => setTimeout(r, 1000));
 
-      // Phase 3: Found
+      // 3. Scoring
+      setPhase("scoring");
+      await new Promise((r) => setTimeout(r, 1200));
+
+      // 4. Sorting (Re-ranking)
+      setPhase("sorting");
+      const sortedDocs = [...initialDocs].sort((a, b) => b.score - a.score);
+      setDocs(sortedDocs);
+      await new Promise((r) => setTimeout(r, 1000));
+
+      // 5. Found
       setPhase("found");
-      await new Promise((r) => setTimeout(r, 4000));
+      await new Promise((r) => setTimeout(r, 3000));
 
-      // Reset
       setPhase("idle");
       setQuery("");
+      setDocs(initialDocs);
     };
 
     runSequence();
-
-    return () => {}; // Cleanup not fully implemented for simpler loop logic, but ideally should cancel promises
+    const interval = setInterval(runSequence, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className="flex flex-col w-full h-full relative overflow-hidden bg-gray-50 rounded-3xl font-sans">
+    <div className="w-full h-full bg-gray-50/50 relative overflow-hidden flex flex-col font-sans p-6 rounded-[32px]">
       {/* Search Header */}
-      <div className="p-6 border-b border-gray-200 bg-white z-10">
-        <div className="flex items-center gap-3 bg-gray-100 p-3 rounded-xl border border-gray-200 transition-colors duration-300 ${phase === 'scanning' ? 'border-violet-300 ring-2 ring-violet-100' : ''}">
+      <div className="relative z-20 mb-6 space-y-2">
+        <div
+          className={`flex items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border transition-all duration-300 ${phase !== "idle" ? "border-violet-200 shadow-md transform scale-[1.02]" : "border-gray-200"}`}
+        >
           <Search
             size={18}
-            className={`transition-colors ${phase !== "idle" ? "text-violet-600" : "text-gray-500"}`}
+            className={phase !== "idle" ? "text-violet-500" : "text-gray-400"}
           />
-          <span className="text-gray-700 font-medium text-sm h-5 flex items-center">
-            {query}
-            {phase === "typing" && (
-              <span className="w-0.5 h-4 bg-violet-500 ml-1 animate-pulse" />
-            )}
-            {query === "" && (
-              <span className="text-gray-400">Search for anything...</span>
-            )}
-          </span>
+          <div className="flex-1">
+            <span className="text-gray-800 font-medium text-sm h-5 flex items-center">
+              {query}
+              {phase === "typing" && (
+                <span className="w-0.5 h-4 bg-violet-500 ml-1 animate-pulse" />
+              )}
+              {query === "" && (
+                <span className="text-gray-400">Search memories...</span>
+              )}
+            </span>
+          </div>
+          {/* Vector Representation */}
+          {phase !== "idle" && phase !== "typing" && (
+            <motion.div
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex gap-1"
+            >
+              <span className="text-[10px] font-mono text-gray-400">vec:</span>
+              <div className="flex gap-0.5">
+                {[0.12, 0.9, 0.4, 0.7].map((v, i) => (
+                  <motion.div
+                    key={i}
+                    animate={{
+                      height: [4, 12, 4],
+                      backgroundColor: ["#ddd", "#8b5cf6", "#ddd"],
+                    }}
+                    transition={{
+                      duration: 1,
+                      repeat: Infinity,
+                      delay: i * 0.1,
+                    }}
+                    className="w-1 rounded-full bg-gray-300"
+                  />
+                ))}
+              </div>
+            </motion.div>
+          )}
         </div>
       </div>
 
-      {/* Document List */}
-      <div className="flex-1 p-6 relative flex flex-col gap-3">
-        {documents.map((doc, i) => {
-          const isTarget = doc.isTarget;
-          const isContext = !!doc.context && phase === "found";
-          const isDimmed = phase === "found" && !isTarget && !isContext;
+      {/* Intelligent Stack */}
+      <div className="flex-1 relative">
+        <AnimatePresence>
+          {docs.map((doc, i) => {
+            const isTarget = doc.isTarget && phase === "found";
+            const showScore =
+              phase === "scoring" || phase === "sorting" || phase === "found";
 
-          return (
-            <motion.div
-              key={doc.id}
-              initial={{ scale: 1, opacity: 1 }}
-              animate={{
-                scale: isTarget && phase === "found" ? 1.02 : 1,
-                opacity: isDimmed ? 0.3 : 1,
-                borderColor:
-                  isTarget && phase === "found"
-                    ? "#8B5CF6"
-                    : isContext
-                      ? "#A78BFA"
-                      : "transparent",
-                backgroundColor:
-                  isTarget && phase === "found"
-                    ? "#FFFFFF"
-                    : isContext
-                      ? "#F5F3FF"
-                      : "transparent",
-              }}
-              className={`p-3 rounded-xl border-2 flex items-center gap-4 transition-all relative ${isTarget && phase === "found" ? "shadow-lg shadow-violet-100" : ""}`}
-            >
-              <div
-                className={`p-2 rounded-lg transition-colors ${isTarget && phase === "found" ? "bg-violet-100 text-violet-600" : "bg-gray-200 text-gray-500"}`}
+            return (
+              <motion.div
+                key={doc.id}
+                layout
+                initial={{ y: i * 15, opacity: 1 }}
+                animate={{
+                  y: isTarget ? 0 : phase === "found" ? 140 + i * 15 : i * 75,
+                  scale: isTarget ? 1.05 : phase === "found" ? 0.95 : 1,
+                  opacity: phase === "found" && !isTarget ? 0.4 : 1,
+                  zIndex: 50 - i,
+                }}
+                transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                className={`absolute w-full p-4 bg-white rounded-xl border border-gray-100 shadow-sm flex items-center gap-4 ${isTarget ? "shadow-xl shadow-violet-500/10 border-violet-100 ring-1 ring-violet-50" : ""}`}
               >
-                <doc.icon size={18} />
-              </div>
-
-              <div className="flex-1">
-                <div className="flex justify-between items-center">
-                  <h4
-                    className={`font-semibold text-sm transition-colors ${isTarget && phase === "found" ? "text-violet-900" : "text-gray-800"}`}
-                  >
-                    {doc.title}
-                  </h4>
-                  {isContext && (
-                    <motion.span
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="text-[10px] font-bold text-violet-500 bg-violet-100 px-2 py-0.5 rounded-full"
-                    >
-                      CONTEXT LINK
-                    </motion.span>
-                  )}
+                <div
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${doc.color}`}
+                >
+                  {doc.type === "mail" && <Mail size={18} />}
+                  {doc.type === "file" && <FileText size={18} />}
+                  {doc.type === "chat" && <MessageSquare size={18} />}
+                  {doc.type === "doc" && <FileText size={18} />}
                 </div>
-                <p className="text-xs text-gray-400">{doc.date}</p>
-              </div>
 
-              {/* Connecting Line for Context */}
-              {isContext && (
-                <motion.div
-                  initial={{ height: 0 }}
-                  animate={{ height: "100%" }}
-                  className="absolute left-6 top-10 w-0.5 bg-violet-200 -z-10"
-                />
-              )}
-            </motion.div>
-          );
-        })}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <h4
+                      className={`text-sm font-semibold truncate ${isTarget ? "text-gray-900" : "text-gray-700"}`}
+                    >
+                      {doc.title}
+                    </h4>
 
-        {/* Scanning Beam */}
-        {phase === "scanning" && (
-          <motion.div
-            layoutId="scan-beam"
-            className="absolute inset-x-0 h-32 bg-gradient-to-b from-violet-500/0 via-violet-500/10 to-violet-500/0 z-20 pointer-events-none backdrop-blur-[1px]"
-            initial={{ top: "-20%" }}
-            animate={{ top: "120%" }}
-            transition={{ duration: 1.5, ease: "easeInOut", repeat: Infinity }}
-          />
-        )}
+                    {/* Similarity Score Badge */}
+                    {showScore && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${doc.score > 0.8 ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-500"}`}
+                      >
+                        <Sparkles size={8} />
+                        {doc.score.toFixed(2)}
+                      </motion.div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                    {doc.date}
+                    {showScore && (
+                      <span className="w-1 h-1 rounded-full bg-gray-300" />
+                    )}
+                    {showScore && (
+                      <span className="font-mono text-[10px] text-gray-400">
+                        sim_score
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                {isTarget && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="absolute -right-2 -top-2 bg-violet-500 text-white p-1 rounded-full shadow-lg"
+                  >
+                    <CheckCircle2 size={12} />
+                  </motion.div>
+                )}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
     </div>
   );
