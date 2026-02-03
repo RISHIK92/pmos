@@ -44,7 +44,7 @@ function Triangle(props: any) {
 
 export function Marquee() {
   return (
-    <section className="py-12 mt-24 bg-white border-y border-gray-100 overflow-hidden relative">
+    <section className="py-12 bg-white border-y border-gray-100 overflow-hidden relative">
       <div className="flex w-max">
         <motion.div
           animate={{ x: "-50%" }}
