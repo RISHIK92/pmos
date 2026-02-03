@@ -23,7 +23,6 @@ const integrations = [
   { name: "Slack", icon: MessageSquare },
   { name: "Notion", icon: Database },
   { name: "AWS", icon: Cloud },
-  { name: "Linear", icon: Zap },
   { name: "Vercel", icon: Triangle },
   { name: "VS Code", icon: Terminal },
 ];

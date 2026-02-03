@@ -185,9 +185,13 @@ function MemoryVisual() {
                 layout
                 initial={{ y: i * 15, opacity: 1 }}
                 animate={{
-                  y: isTarget ? 0 : phase === "found" ? 140 + i * 15 : i * 75,
-                  scale: isTarget ? 1.05 : phase === "found" ? 0.95 : 1,
-                  opacity: phase === "found" && !isTarget ? 0.4 : 1,
+                  y: isTarget
+                    ? 0
+                    : phase === "found"
+                      ? 200 // Move them way down
+                      : i * 75,
+                  scale: isTarget ? 1.05 : phase === "found" ? 0.5 : 1,
+                  opacity: phase === "found" && !isTarget ? 0 : 1,
                   zIndex: 50 - i,
                 }}
                 transition={{ type: "spring", stiffness: 350, damping: 25 }}
@@ -253,6 +257,153 @@ function MemoryVisual() {
   );
 }
 
+// --- Real-time Web Visual Component ---
+function WebVisual() {
+  const [phase, setPhase] = useState<
+    "idle" | "typing" | "searching" | "synthesizing"
+  >("idle");
+  const [query, setQuery] = useState("");
+  const fullQuery = "Who won the Monaco GP?";
+  const [answer, setAnswer] = useState("");
+  const fullAnswer = "Verstappen won, holding off Alonso. Ocon took 3rd.";
+
+  useEffect(() => {
+    const runSequence = async () => {
+      setPhase("typing");
+      for (let i = 0; i <= fullQuery.length; i++) {
+        setQuery(fullQuery.slice(0, i));
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
+      setPhase("searching");
+      await new Promise((r) => setTimeout(r, 2000));
+
+      setPhase("synthesizing");
+      for (let i = 0; i <= fullAnswer.length; i++) {
+        setAnswer(fullAnswer.slice(0, i));
+        await new Promise((r) => setTimeout(r, 30));
+      }
+
+      await new Promise((r) => setTimeout(r, 4000));
+
+      // Reset
+      setPhase("idle");
+      setQuery("");
+      setAnswer("");
+    };
+
+    runSequence();
+    const interval = setInterval(runSequence, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="w-full h-full flex flex-col bg-gray-50/50 rounded-[32px] overflow-hidden relative font-sans">
+      {/* Header */}
+      <div className="px-8 py-6 bg-white border-b border-gray-200 z-10">
+        <div className="flex items-center gap-2 mb-2">
+          <span
+            className={`w-2 h-2 rounded-full ${phase === "idle" ? "bg-gray-300" : "bg-red-500 animate-pulse"}`}
+          />
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+            {phase === "searching"
+              ? "Browsing Web..."
+              : phase === "synthesizing"
+                ? "Synthesizing..."
+                : "Live Search"}
+          </span>
+        </div>
+        <div className="text-lg font-medium text-gray-900 h-7 flex items-center">
+          "{query}"
+          {phase === "typing" && (
+            <span className="w-0.5 h-5 bg-blue-500 ml-1 animate-pulse" />
+          )}
+        </div>
+      </div>
+
+      {/* Results Stream */}
+      <div className="p-8 space-y-6 flex-1 relative">
+        {/* Sources Animation */}
+        <div className="flex gap-3 overflow-hidden h-8">
+          <AnimatePresence>
+            {(phase === "searching" || phase === "synthesizing") && (
+              <>
+                <motion.div
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.1 }}
+                  className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm text-xs font-medium text-gray-600"
+                >
+                  <span className="w-3 h-3 rounded-full bg-red-100 flex items-center justify-center text-[8px] text-red-600">
+                    F
+                  </span>
+                  F1.com
+                </motion.div>
+                <motion.div
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm text-xs font-medium text-gray-600"
+                >
+                  <span className="w-3 h-3 rounded-full bg-blue-100 flex items-center justify-center text-[8px] text-blue-600">
+                    S
+                  </span>
+                  Sky Sports
+                </motion.div>
+                <motion.div
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                  className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm text-xs font-medium text-gray-600"
+                >
+                  <span className="w-3 h-3 rounded-full bg-orange-100 flex items-center justify-center text-[8px] color-orange-600">
+                    B
+                  </span>
+                  BBC
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Answer Card */}
+        <AnimatePresence>
+          {(phase === "synthesizing" || answer) && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="bg-white p-6 rounded-2xl border border-blue-100 shadow-xl shadow-blue-500/5 relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 p-4 opacity-5">
+                <Globe size={100} className="text-blue-500" />
+              </div>
+              <div className="relative z-10">
+                <h4 className="text-xl font-bold text-gray-900 mb-2">
+                  Verstappen wins in Monaco.
+                </h4>
+                <p className="text-gray-600 leading-relaxed text-sm h-12">
+                  {answer}
+                  {phase === "synthesizing" && (
+                    <span className="inline-block w-1.5 h-3 bg-blue-400 ml-1 animate-pulse" />
+                  )}
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <span className="px-2 py-1 bg-gray-50 rounded text-xs font-medium text-gray-500 border border-gray-100">
+                    Formule 1
+                  </span>
+                  <span className="px-2 py-1 bg-gray-50 rounded text-xs font-medium text-gray-500 border border-gray-100">
+                    Live
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
 const features = [
   {
     id: "web-intel",
@@ -263,65 +414,7 @@ const features = [
     icon: Globe,
     color: "bg-blue-500",
     textColor: "text-blue-600",
-    visualContent: (
-      <div className="w-full h-full flex flex-col bg-gray-50 rounded-3xl overflow-hidden relative">
-        {/* Header */}
-        <div className="px-8 py-6 bg-white border-b border-gray-200 z-10">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-              Live Web Search
-            </span>
-          </div>
-          <div className="text-lg font-medium text-gray-900">
-            "Who won the Monaco GP today?"
-          </div>
-        </div>
-
-        {/* Results Stream */}
-        <div className="p-8 space-y-6">
-          {/* Sources */}
-          <div className="flex gap-3 overflow-hidden">
-            {["Motorsport.com", "F1 Official", "Sky Sports"].map(
-              (source, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm text-xs font-medium text-gray-600"
-                >
-                  <div className="w-4 h-4 rounded-full bg-gray-200 flex-shrink-0" />
-                  {source}
-                </div>
-              ),
-            )}
-          </div>
-
-          {/* Answer Card */}
-          <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-xl shadow-blue-500/5 relative">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-              <Globe size={100} className="text-blue-500" />
-            </div>
-            <div className="relative z-10">
-              <h4 className="text-xl font-bold text-gray-900 mb-2">
-                Verstappen wins in Monaco.
-              </h4>
-              <p className="text-gray-600 leading-relaxed text-sm">
-                Max Verstappen secured victory at the Monaco Grand Prix, holding
-                off a late challenge from Fernando Alonso. Ocon finished third
-                for Alpine.
-              </p>
-              <div className="mt-4 flex gap-2">
-                <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium text-gray-500">
-                  Formule 1
-                </span>
-                <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium text-gray-500">
-                  2h ago
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    ),
+    visualContent: <WebVisual />,
   },
   {
     id: "memory",
@@ -352,9 +445,9 @@ const features = [
           <div className="flex justify-between items-start mb-8">
             <div>
               <p className="text-sm text-emerald-400 font-medium uppercase tracking-wider mb-1">
-                Net Worth
+                Balance
               </p>
-              <h3 className="text-5xl font-bold tracking-tighter">$142,450</h3>
+              <h3 className="text-5xl font-bold tracking-tighter">₹52,450</h3>
             </div>
             <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
               <TrendingUp size={20} className="text-emerald-400" />
@@ -378,11 +471,10 @@ const features = [
           <div className="space-y-3">
             <p className="text-xs text-gray-500 font-bold uppercase">Recent</p>
             {[
-              { name: "Apple Inc.", amount: "-$14.99", icon: "🍎" },
+              { name: "Apple Inc.", amount: "-₹999" },
               {
                 name: "Salary Deposit",
-                amount: "+$4,250",
-                icon: "💰",
+                amount: "+₹40250",
                 pos: true,
               },
             ].map((tx, i) => (
@@ -391,7 +483,6 @@ const features = [
                 className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-lg">{tx.icon}</span>
                   <span className="font-medium text-sm text-gray-200">
                     {tx.name}
                   </span>
