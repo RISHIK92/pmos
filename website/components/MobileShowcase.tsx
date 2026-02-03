@@ -92,7 +92,7 @@ export function MobileShowcase() {
             One App. <span className="text-gray-400">Total Control.</span>
           </h2>
           <p className="text-xl text-gray-500">
-            The actual operating system running on your device.
+            The actual AI running on your device.
           </p>
         </div>
 
@@ -105,10 +105,8 @@ export function MobileShowcase() {
               <div className="w-1.5 h-1.5 rounded-full bg-gray-800" />
             </div>
 
-            {/* Status Bar Area (Visual only, underlying transparency handled by screens) */}
             <div className="absolute top-0 w-full h-14 bg-transparent z-20 pointer-events-none" />
 
-            {/* Screen Content - REMOVED PADDING AND BACKGROUND from container to allow immersive screens */}
             <div className="w-full h-full relative overflow-hidden bg-black rounded-[45px]">
               <AnimatePresence mode="popLayout">
                 <motion.div
@@ -123,9 +121,7 @@ export function MobileShowcase() {
                 </motion.div>
               </AnimatePresence>
 
-              {/* Bottom Tab Bar (Simulated) */}
               <div className="absolute bottom-0 w-full h-20 bg-gradient-to-t from-black/5 to-transparent flex items-center justify-around pb-6 px-6 z-20 pointer-events-none">
-                {/* Just show simple dots for tabs to save space */}
                 <div className="flex gap-2 p-2 rounded-full bg-black/20 backdrop-blur-md">
                   {screens.map((_, i) => (
                     <div
@@ -138,8 +134,7 @@ export function MobileShowcase() {
             </div>
           </div>
 
-          {/* Feature Indicators */}
-          <div className="mt-12 flex flex-wrap gap-4 justify-center max-w-2xl">
+          <div className="mt-12 flex flex-wrap gap-4 justify-center max-w-4xl">
             {screens.map((screen, i) => (
               <button
                 key={i}

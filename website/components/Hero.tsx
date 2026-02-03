@@ -33,7 +33,7 @@ export function Hero() {
   }, []);
 
   return (
-    <section className="relative min-h-[90vh] flex flex-col items-center justify-center overflow-hidden px-4 pt-12 md:pt-0">
+    <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden px-4 pt-20 md:pt-24 pb-12">
       {/* Background Gradients */}
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_70%_30%,rgba(0,184,148,0.1),transparent_60%)]" />
       <div className="absolute left-0 bottom-0 top-0 w-1/3 bg-gradient-to-r from-gray-50/50 to-transparent -z-10" />
