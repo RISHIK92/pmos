@@ -486,7 +486,9 @@ export const IntentHandler = {
       case "schedule_critical_memory": {
         const { title, timestamp } = data;
 
-        console.log(`⏰ Scheduling Critical Alarm: "${title}" at ${timestamp}`);
+        console.log(
+          `⏰ [FRONTEND] Scheduling Critical Alarm: "${title}" at ${timestamp} (Current: ${new Date().toISOString()})`,
+        );
 
         // Use your existing logic to schedule the native alarm
         AlarmManager.scheduleCriticalAlarm(title, Number(timestamp));

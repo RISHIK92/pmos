@@ -15,8 +15,7 @@ from app.chains.enricher import enrich_query
 import asyncio
 import json
 from typing import AsyncGenerator
-import logging
-from langchain_core.messages import BaseMessage
+from datetime import datetime
 
 class QueryService:
     def __init__(self):
@@ -143,6 +142,7 @@ class QueryService:
                          for t_call in output.tool_calls:
                              if t_call["name"] in CLIENT_TOOL_NAMES:
                                  action_name = t_call["name"].replace("client_", "")
+                                 print(f"[BACKEND] Emitting CLIENT_ACTION: {action_name} at {datetime.now().isoformat()}")
                                  yield f"data: {json.dumps({'type': 'CLIENT_ACTION', 'action': action_name, 'data': t_call['args']})}\n\n"
                                  is_client_action = True
                     

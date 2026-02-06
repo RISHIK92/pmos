@@ -4,189 +4,315 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from services.tool_registry import tool_retriever
-from groq import AsyncGroq
 import os
 
-llm = ChatGroq(
-    model="moonshotai/kimi-k2-instruct-0905",
-    api_key=os.getenv("GROQ_API_KEY"),
-    temperature=0.0,
-    max_retries=1,
+# 1. THE BRAIN (Reasoning & Conversation) - Gemini 2.5 Flash
+# Note: We do NOT bind tools to this model.
+brain_llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    temperature=0.3, # Slightly higher for natural conversation
+    convert_system_message_to_human=True 
 )
 
-# Search LLM (Compound Model)
+# 2. THE HANDS (Tool Calling Expert) - Kimi
+tool_llm = ChatGroq(
+    model="moonshotai/kimi-k2-instruct-0905",
+    api_key=os.getenv("GROQ_API_KEY"),
+    temperature=0.0, # Zero temp for precise JSON generation
+    max_retries=2,
+)
+
+# 3. THE RESEARCHER - Compound
 search_llm = ChatGroq(
     model="groq/compound",
     api_key=os.getenv("GROQ_API_KEY"),
     temperature=0.0
 )
 
-tool_node = ToolNode(SERVER_TOOLS)
+# LangGraph Node for Server-Side Execution
+tool_execution_node = ToolNode(SERVER_TOOLS)
 
-async def chat_node(state: AgentState):
+async def brain_node(state: AgentState):
     profile = state.get("user_profile", "Unknown User")
     memories = state.get("vector_context", [])
-    
-    messages = state["messages"]
-    last_user_message = next((m.content for m in reversed(messages) if m.type == "human"), "")
-
-    if last_user_message:
-        relevant_tools = tool_retriever.query(str(last_user_message), k=5)
-        print(f"🔎 Retrieved tools for '{last_user_message}': {[t.name for t in relevant_tools]}")
-        
-        current_names = {t.name for t in relevant_tools}
-        
-        # Case 1: Has Task, needs Memory
-        if "create_task" in current_names and "save_memory" not in current_names:
-            if "save_memory" in tool_retriever.tool_map:
-                relevant_tools.append(tool_retriever.tool_map["save_memory"])
-                print("➕ Auto-injected 'save_memory' for context safety.")
-
-        # Case 2: Has Memory, needs Task
-        elif "save_memory" in current_names and "create_task" not in current_names:
-            if "create_task" in tool_retriever.tool_map:
-                relevant_tools.append(tool_retriever.tool_map["create_task"])
-                print("➕ Auto-injected 'create_task' for context safety.")
-        
-        # Always inject Search capability
-        if "transfer_to_search" in tool_retriever.tool_map and "transfer_to_search" not in current_names:
-            relevant_tools.append(tool_retriever.tool_map["transfer_to_search"])
-            print("➕ Auto-injected 'transfer_to_search' for global search availability.")
-
-        print(f"🔎 Final Tools: {[t.name for t in relevant_tools]}")
-        llm_with_tools = llm.bind_tools(relevant_tools, tool_choice="auto")
-    else:
-        llm_with_tools = llm.bind_tools(ALL_TOOLS, tool_choice="auto")
-
-
     memory_str = "\n".join([f"- {m}" for m in memories]) if memories else "No relevant memories."
-
-    system_prompt_content = f"""
-    You are DeX, an advanced Personal Operating System integrated directly into the user's life and device. Your goal is to be proactive, efficient, and context-aware.
-    === #1. THE "NO GUESSING" RULE (CRITICAL) ===
-    You have a context block below titled "RELEVANT MEMORIES".
-    • **IF** the user asks a factual question (e.g., "Score of the match", "Location of event", "Price of X")...
-    • **AND** the answer is NOT explicitly written in the "RELEVANT MEMORIES" block...
-    • **THEN** you MUST use the `transfer_to_search` tool.
     
-    ❌ DO NOT use your internal training data for recent events (Sports, News, Weather).
-    ❌ DO NOT guess locations or dates.
+    is_tool_result = len(state["messages"]) > 0 and state["messages"][-1].type == "tool"
 
-    === #2. CORE DIRECTIVES (NON-NEGOTIABLE) ===
-    1. **Personal First:** Queries about "apps", "databases", or "projects" refer to Rishik's personal work.
-    2. **Memory is Truth:** Always check `search_memory` for internal queries. If `search_memory` returns a fact, that fact is the answer. only reply with what was do not ever add any extra information from the context.
-    3. **No Generic Acknowledgments:** NEVER say "Got it", "I understand", "Thanks for the context". Just answer.
-    4. **Action Over Talk:** If the user wants to do something, call the tool. Do not ask for permission unless parameters are missing.
-
-    === #3. CURRENT CONTEXT ===
-    • User Profile: {profile}
-    • Recent Memories:
+    system_prompt = f"""
+    You are DeX, the "Brain" of a Personal Operating System.
+    
+    === USER CONTEXT ===
+    • User: {profile}
+    • Loaded Memories:
     {memory_str}
 
-    === #4. DATE & TIME PROTOCOL ===
-    • You are the source of truth for time. Calculate relative dates ("next Friday") based on the Current Time.
+    === YOUR SUBSYSTEMS (CAPABILITIES) ===
+    You do not execute actions yourself. Identify the user's intent and delegate to the correct specialist:
+    
+    1. **MEMORY & SEARCH SYS:** - Internal facts, user preferences, past conversations, and Web Search.
+       - *Tools:* search_memory, save_memory, transfer_to_search.
+       
+    2. **PRODUCTIVITY SYS:** - Tasks, To-Do lists, Alarms, Timers, Calendar, and Deadlines.
+       - *Tools:* create_task, get_tasks, set_alarm, set_timer.
+       
+    3. **HEALTH & BIOLOGY SYS:** - Water, Nutrition (Food/Calories), Sleep, Period Tracking, and Health Stats.
+       - *Tools:* log_water, log_meal, log_period, get_health_dashboard, sleep_tracking.
+       
+    4. **FINANCE & ASSETS SYS:** - Expenses, Income, Bank Accounts, and Transactions.
+       - *Tools:* add_transaction, get_accounts, create_account.
+       
+    5. **DEVICE & COMMS SYS:** - Phone Hardware (Apps, Volume), Calls, SMS, WhatsApp, and Music/Media.
+       - *Tools:* open_app, play_media, call_contact, send_whatsapp.
+       
+    6. **LIFESTYLE & GROWTH SYS:** - Journaling, Content Watchlist (Movies/Books), and Developer Stats (GitHub).
+       - *Tools:* save_journal, add_content, get_dev_profile.
 
-    === #5. TOOL USAGE PROTOCOL ===
+    === DELEGATION PROTOCOL ===
+    1. **IF ACTION REQUIRED:** Output `||DELEGATE||: <System Name> - <Instruction>`
+       - *User:* "I spent 500 on food." 
+         *Output:* `||DELEGATE||: FINANCE SYS - Log an expense of 500 for food.`
+       - *User:* "I'm on my period." 
+         *Output:* `||DELEGATE||: HEALTH SYS - Log period start today.`
+       - *User:* "Play Taylor Swift."
+         *Output:* `||DELEGATE||: DEVICE SYS - Play media song Taylor Swift.`
 
-    [A] RETRIEVAL TOOLS (search_memory, get_tasks, get_health)
-    - **Usage:** Call these to get information.
-    - **Output Rule:** The return value IS the answer.
-    - **Example:** User: "What is the code for Project Alpha?"
-      Tool Output: "Code: 8899"
-      DeX Response: "The code for Project Alpha is 8899."
+    2. **IF INFORMATION GAP:** Output `||DELEGATE||: MEMORY SYS - Search memory for <topic>.` OR `||SEARCH||: <query>` if it requires the web.
 
-    [B] CLIENT TOOLS (Device Actions)
-    - **Usage:** These trigger hardware (Alarm, Call, App).
-    - **Output Rule:** Trigger the tool, then confirm briefly.
-    - **Example:** "Calling Mom..." or "Opening Spotify."
-
-    [C] CRITICAL REMINDER PROTOCOL
-    If user sets a CRITICAL reminder with a specific time:
-    1. Call `save_memory` (is_critical=True, due_time="...").
-    2. IMMEDIATELY call `client_schedule_critical_memory` with the unix timestamp.
-
-    === 5. INTENT MAPPING ===
-    • "Remind me..." -> `client_set_alarm` OR `create_task`.
-    • "Remember that..." -> `save_memory`.
-    • "What is my..." -> `search_memory` or `get_journal_today`.
-    • "Call [Name]" -> `client_call_contact`.
-
-    Now, assist the user. Be direct and data-driven.
+    3. **IF CONVERSATION:** Just reply naturally.
+    
+    { "✅ SYSTEM UPDATE: Tool execution finished. Use the results above to answer." if is_tool_result else "" }
     """
-    sys_msg = SystemMessage(content=system_prompt_content)
-    full_prompt = [sys_msg] + state["messages"]
+    
+    messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    response = await brain_llm.ainvoke(messages)
+    return {"messages": [response]}
 
-    response = await llm_with_tools.ainvoke(full_prompt)
+async def action_mapping_node(state: AgentState):
+    """
+    Kimi: Receives the '||DELEGATE||' instruction, expands keywords, and picks the specific tool.
+    """
+    messages = state["messages"]
+    last_message = messages[-1]
+    
+    # 1. Parse Instruction
+    # Format: "||DELEGATE||: FINANCE SYS - Log 500 rupees"
+    raw_text = last_message.content.replace("||DELEGATE||:", "").strip()
+    
+    # 2. KEYWORD EXPANSION (The Bridge between Brain and Hand)
+    # We map the System Name to specific keywords found in your tool definitions
+    search_query = raw_text
+    
+    domain_map = {
+        "MEMORY & SEARCH SYS": "search_memory save_memory retrieve remember fact context web internet",
+        
+        "PRODUCTIVITY SYS": "create_task update_task delete_task get_tasks section list alarm timer deadline schedule remind",
+        
+        "HEALTH & BIOLOGY SYS": "log_water log_meal get_nutrition calories kcal food eat drink log_period cycle menstruation health dashboard sleep steps",
+        
+        "FINANCE SYS": "add_transaction expense income money cost paid rupees bank account balance create_account",
+        
+        "DEVICE & COMMS SYS": "open_app launch play_media music song pause next call_contact phone send_whatsapp sms message text",
+        
+        "LIFESTYLE & GROWTH SYS": "save_journal diary write entry add_content movie book watch read github dev profile stats repo"
+    }
+    
+    # Check which system was called and inject its keywords
+    active_domain = "General"
+    for domain, keywords in domain_map.items():
+        if domain in raw_text:
+            search_query += f" {keywords}"
+            active_domain = domain
+            print(f"🔹 Unpacking {domain} -> Added keywords")
+            break
+
+    print(f"🤖 Kimi Searching Tools for: '{search_query}'")
+
+    # 3. Retrieve Tools (Increased k to ensure we catch related tools)
+    relevant_tools = tool_retriever.query(search_query, k=10)
+    
+    # 4. Safety Injection (Force critical tools if missing)
+    current_names = {t.name for t in relevant_tools}
+    
+    # If dealing with tasks, ensure we can create sections
+    if "create_task" in current_names and "create_section" not in current_names:
+         relevant_tools.append(tool_retriever.tool_map.get("create_section"))
+         
+    # If dealing with health, ensure dashboard is available for context
+    if "log_meal" in current_names and "get_health_dashboard" not in current_names:
+        relevant_tools.append(tool_retriever.tool_map.get("get_health_dashboard"))
+
+    # Always allow search transfer
+    if "transfer_to_search" not in current_names:
+        relevant_tools.append(tool_retriever.tool_map.get("transfer_to_search"))
+
+    # Filter None matches
+    relevant_tools = [t for t in relevant_tools if t]
+
+    # 5. Bind and Invoke Kimi
+    # We force tool_choice="auto" so Kimi feels free to pick the right one
+    llm_with_tools = tool_llm.bind_tools(relevant_tools, tool_choice="auto")
+    
+    kimi_prompt = f"""
+    You are the Action Engine.
+    The Brain requested: "{raw_text}"
+    
+    Domain: {active_domain}
+    
+    YOUR GOAL:
+    1. Select the specific tool that matches the instruction.
+    2. If the user provided specific data (like '500 rupees' or 'ate a burger'), use it in the arguments.
+    3. If multiple actions are needed (e.g., 'Save Journal' AND 'Log Emotion'), call both.
+    """
+    
+    response = await llm_with_tools.ainvoke([HumanMessage(content=kimi_prompt)])
+    return {"messages": [response]}
+    """
+    Kimi: Receives the '||DELEGATE||' instruction and maps it to a specific Tool Call.
+    """
+    messages = state["messages"]
+    last_message = messages[-1]
+    
+    # Extract the instruction (remove the prefix)
+    instruction = last_message.content.replace("||DELEGATE||:", "").strip()
+    print(f"🤖 Kimi received instruction: '{instruction}'")
+
+    # Dynamic Tool Retrieval based on the specific instruction
+    relevant_tools = tool_retriever.query(instruction, k=5)
+    
+    # Safety Injections (same logic as before)
+    current_names = {t.name for t in relevant_tools}
+    if "create_task" in current_names and "save_memory" not in current_names:
+        relevant_tools.append(tool_retriever.tool_map.get("save_memory"))
+    if "save_memory" in current_names and "create_task" not in current_names:
+        relevant_tools.append(tool_retriever.tool_map.get("create_task"))
+    if "transfer_to_search" not in current_names:
+        relevant_tools.append(tool_retriever.tool_map.get("transfer_to_search"))
+
+    # Remove None values if retrieval failed
+    relevant_tools = [t for t in relevant_tools if t]
+    
+    print(f"🔧 Kimi Binding Tools: {[t.name for t in relevant_tools]}")
+
+    # Bind tools to Kimi
+    llm_with_tools = tool_llm.bind_tools(relevant_tools, tool_choice="auto")
+    
+    # Kimi just needs to hear the instruction
+    kimi_prompt = f"""
+    You are the Action Engine. 
+    The "Brain" has requested this action: "{instruction}"
+    
+    Map this request to the correct tool call. 
+    If multiple tools are needed (e.g. Save Memory AND Set Alarm), call them all.
+    """
+    
+    # We send a fresh message to Kimi to avoid polluting it with the whole Gemini chat history
+    response = await llm_with_tools.ainvoke([HumanMessage(content=kimi_prompt)])
+    
+    # We return this response so it appends to the history
+    # The 'should_continue_action' edge will see the tool_calls in this response
+    print(f"🤖 Action Mapping Node Output: {response.content}")
+    print(f"🔧 Tool Calls: {response.tool_calls}")
     return {"messages": [response]}
 
 async def search_node(state: AgentState):
+    """Compound Model: Handles web searches."""
     messages = state["messages"]
     last_message = messages[-1]
     
-    # Extract query from tool call if available, else use last human message
-    query = ""
-    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        if last_message.tool_calls[0]["name"] == "transfer_to_search":
-            query = last_message.tool_calls[0]["args"].get("query", "")
-    
-    system_prompt = f"""
-    RESPONSE RULES:
-    1. **Be Concise & Direct:** Avoid long paragraphs unless deeply analyzing a complex topic.
-    2. **Just the Facts:** Do not add "fluff" like "Here is what I found" or "I hope this helps."
-    3. **Depth:** Only provide lengthy, detailed explanations if the user explicitly asks for an explanation or the topic is highly complex.
-    4. **Important** Do not mention how the answer was obtained.
-    5. **Links:** ALWAYS format links as `[Title](URL)`. Never output raw URLs.
-    """
-    
-    if not query:
-        query = next((m.content for m in reversed(messages) if m.type == "human"), "")
-
+    query = last_message.content.replace("||SEARCH||:", "").strip()
     print(f"🌍 Routing to Search Node for: {query}")
     
-    # Direct invocation via LangChain
+    search_prompt = "Provide a concise, factual answer. Use markdown links [Title](URL)."
+    
     response = await search_llm.ainvoke([
-        SystemMessage(content=system_prompt),
+        SystemMessage(content=search_prompt),
         HumanMessage(content=query)
     ])
     
-    return {"messages": [response]}
-    
+    print(f"🌍 Search Node Output: {response.content}")
 
-def should_continue(state: AgentState):
-    """Decide whether to continue to tools or end."""
-    messages = state["messages"]
-    last_message = messages[-1]
+    return {"messages": [response]}
+
+# --- ROUTING LOGIC ---
+
+def router_brain(state: AgentState):
+    """Decides where to go after Gemini speaks."""
+    last_msg = state["messages"][-1].content.strip()
     
-    if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
+    if "||DELEGATE||:" in last_msg:
+        return "map_action"
+    elif "||SEARCH||:" in last_msg:
+        return "search"
+    else:
+        return "end"
+
+def router_action(state: AgentState):
+    """Decides where to go after Kimi selects a tool."""
+    last_msg = state["messages"][-1]
+    
+    if not hasattr(last_msg, "tool_calls") or not last_msg.tool_calls:
+        # Kimi failed to pick a tool -> End or Error handling
         return "end"
     
-    tool_calls = last_message.tool_calls
+    tool_calls = last_msg.tool_calls
     
+    # If Search was selected via tool (fallback)
     if any(tc["name"] == "transfer_to_search" for tc in tool_calls):
         return "search"
 
-    has_server_tools = any(tc["name"] in SERVER_TOOL_NAMES for tc in tool_calls)
-    has_client_tools = any(tc["name"] in CLIENT_TOOL_NAMES for tc in tool_calls)
+    has_server = any(tc["name"] in SERVER_TOOL_NAMES for tc in tool_calls)
+    has_client = any(tc["name"] in CLIENT_TOOL_NAMES for tc in tool_calls)
 
-    if has_server_tools:
-        return "tools"
+    if has_server:
+        return "execute_server" # Go to ToolNode
+    if has_client:
+        return "end" # Return to React Native to execute
         
-    if has_client_tools:
-        return "end"
-    
     return "end"
 
-# Build the graph
-graph = StateGraph(AgentState)
-graph.add_node("llm", chat_node)
-graph.add_node("tools", tool_node)
-graph.add_node("search", search_node)
+# --- GRAPH CONSTRUCTION ---
 
-graph.add_edge(START, "llm")
-graph.add_conditional_edges("llm", should_continue, {"tools": "tools", "search": "search", "end": END})
-graph.add_edge("tools", "llm")  # After tool execution, go back to LLM
-graph.add_edge("search", END)   # After search, end
+graph = StateGraph(AgentState)
+
+# Nodes
+graph.add_node("brain", brain_node)
+graph.add_node("map_action", action_mapping_node)
+graph.add_node("search", search_node)
+graph.add_node("execute_server", tool_execution_node)
+
+# Edges
+graph.add_edge(START, "brain")
+
+# Brain Routing
+graph.add_conditional_edges(
+    "brain", 
+    router_brain, 
+    {
+        "map_action": "map_action",
+        "search": "search",
+        "end": END
+    }
+)
+
+# Action Routing (Kimi)
+graph.add_conditional_edges(
+    "map_action",
+    router_action,
+    {
+        "execute_server": "execute_server",
+        "search": "search",
+        "end": END
+    }
+)
+
+# After Server Tools execute, feed result back to Brain for final confirmation
+graph.add_edge("execute_server", "brain") 
+
+# Search ends the turn
+graph.add_edge("search", END)
 
 app = graph.compile()

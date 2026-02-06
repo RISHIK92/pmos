@@ -1,3 +1,4 @@
+from rich.console import Console
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from typing import Optional, Literal, List
@@ -96,9 +97,9 @@ def client_sleep_tracking(action: str) -> str:
 def client_schedule_critical_memory(title: str, timestamp: int) -> str:
     """
     Trigger a native critical alarm on the phone.
-    Use this immediately after saving a critical memory that has a specific time.
+    Use this immediately after saving a critical memory that has a specific time and pass the required timestamp.
     """
-    return f"Scheduling critical alarm for {title}"
+    return f"Scheduling critical alarm for {title} {timestamp}"
 
 CLIENT_TOOLS = [
     client_call_contact,

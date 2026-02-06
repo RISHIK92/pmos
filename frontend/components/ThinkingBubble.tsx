@@ -10,69 +10,107 @@ import Animated, {
   FadeIn,
   FadeOut,
   Layout,
+  interpolate,
 } from "react-native-reanimated";
-import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+
+const DOT_SIZE = 4;
+const DOT_SPACING = 4;
 
 interface ThinkingBubbleProps {
-  status: string; // The current text to display (e.g., "Thinking...", "Searching...")
+  status: string;
 }
 
 export function ThinkingBubble({ status }: ThinkingBubbleProps) {
-  // Animation for the "Sparkles" or "Gear" icon
-  const rotation = useSharedValue(0);
-  const pulse = useSharedValue(1);
+  // Shared values for the 3 dots
+  const dot1 = useSharedValue(0.3);
+  const dot2 = useSharedValue(0.3);
+  const dot3 = useSharedValue(0.3);
+
+  // Shared value for the icon "breathing"
+  const scale = useSharedValue(1);
 
   useEffect(() => {
-    // Continuous slow rotation for a "working" feel
-    rotation.value = withRepeat(
-      withTiming(360, {
-        duration: 3000,
-        easing: Easing.linear,
-      }),
-      -1,
-      false,
-    );
-
-    // Subtle breathing/pulse effect
-    pulse.value = withRepeat(
+    // 1. Icon Breathing Animation (Subtle scale up/down)
+    scale.value = withRepeat(
       withSequence(
-        withTiming(1.1, { duration: 1000 }),
-        withTiming(1, { duration: 1000 }),
+        withTiming(1.05, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
       true,
     );
+
+    // 2. Dot Wave Animation (Staggered opacity)
+    const animateDot = (dot: any, delay: number) => {
+      dot.value = withSequence(
+        withTiming(0.3, { duration: delay }), // Initial delay
+        withRepeat(
+          withSequence(
+            withTiming(1, { duration: 600 }), // Fade in
+            withTiming(0.3, { duration: 600 }), // Fade out
+          ),
+          -1,
+          true,
+        ),
+      );
+    };
+
+    animateDot(dot1, 0);
+    animateDot(dot2, 200);
+    animateDot(dot3, 400);
   }, []);
 
   const animatedIconStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }, { scale: pulse.value }],
+    transform: [{ scale: scale.value }],
   }));
+
+  // Helper to create dot style
+  const useDotStyle = (opacityValue: any) =>
+    useAnimatedStyle(() => ({
+      opacity: opacityValue.value,
+      transform: [
+        {
+          translateY: interpolate(
+            opacityValue.value,
+            [0.3, 1],
+            [0, -2], // Slight lift when bright
+          ),
+        },
+      ],
+    }));
 
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.iconContainer, animatedIconStyle]}>
-        {/* Using a gradient background for the icon container for a premium feel */}
         <LinearGradient
-          colors={["#00B894", "#55EFC4"]}
+          colors={["#E3F2FD", "#BBDEFB"]} // Very subtle blueish gradient
           style={styles.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <Ionicons name="sparkles" size={18} color="#FFF" />
+          <IconSymbol name="sparkles" size={16} color="#2196F3" />
         </LinearGradient>
       </Animated.View>
 
-      <Animated.View
-        // Animate text changes smoothly
-        key={status}
-        entering={FadeIn.duration(300)}
-        exiting={FadeOut.duration(200)}
-        layout={Layout.springify()}
-        style={styles.textContainer}
-      >
-        <Text style={styles.text}>{status}</Text>
-      </Animated.View>
+      <View style={styles.contentContainer}>
+        <Animated.Text
+          key={status}
+          entering={FadeIn.duration(400)}
+          exiting={FadeOut.duration(200)}
+          style={styles.text}
+        >
+          {status}
+        </Animated.Text>
+
+        {/* Dot Wave Indicator */}
+        <View style={styles.dotsContainer}>
+          <Animated.View style={[styles.dot, useDotStyle(dot1)]} />
+          <Animated.View style={[styles.dot, useDotStyle(dot2)]} />
+          <Animated.View style={[styles.dot, useDotStyle(dot3)]} />
+        </View>
+      </View>
     </View>
   );
 }
@@ -82,38 +120,49 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    backgroundColor: "#F0F2F5",
-    borderRadius: 24,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     marginVertical: 4,
-    maxWidth: "85%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
     borderWidth: 1,
-    borderColor: "#E1E1E1",
+    borderColor: "rgba(0,0,0,0.03)", // Very subtle border
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 1,
   },
   iconContainer: {
-    marginRight: 12,
+    marginRight: 10,
   },
   gradient: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
   },
-  textContainer: {
-    flex: 1,
+  contentContainer: {
+    flexDirection: "row",
+    alignItems: "baseline",
   },
   text: {
-    fontSize: 15,
-    color: "#4A4A4A",
-    fontWeight: "600",
-    fontFamily: Platform.OS === "ios" ? "System" : "Roboto",
-    letterSpacing: 0.3,
+    fontSize: 14,
+    color: "#546E7A", // Blue-grey for "system" text
+    fontWeight: "500",
+    letterSpacing: 0.2,
+    marginRight: 8,
+  },
+  dotsContainer: {
+    flexDirection: "row",
+    gap: DOT_SPACING,
+    alignItems: "center",
+  },
+  dot: {
+    width: DOT_SIZE,
+    height: DOT_SIZE,
+    borderRadius: DOT_SIZE / 2,
+    backgroundColor: "#2196F3", // Matching the icon color
   },
 });
