@@ -30,7 +30,7 @@ type NotificationPayload struct {
 var ctx = context.Background()
 
 func main() {
-	redisArr := getEnv("REDIS_URL", "localhost") + ":" + getEnv("REDIS_PORT", "6379")
+	redisArr := getEnv("REDIS_HOST", "localhost") + ":" + getEnv("REDIS_PORT", "6379")
 	redisPassword := getEnv("REDIS_PASSWORD", "securepassword")
 
 	rdb := redis.NewClient(&redis.Options{

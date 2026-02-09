@@ -1,13 +1,21 @@
-FROM golang:1.23
+FROM golang:1.24-alpine AS builder
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
 COPY go.mod go.sum ./
-
 RUN go mod download && go mod verify
 
 COPY . .
 
-RUN go build -v -o /usr/local/bin/app .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o main .
 
-CMD ["app"]
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+COPY --from=builder /app/main .
+
+CMD ["./main"]

@@ -1,0 +1,23 @@
+# Ignore local virtual environments (CRITICAL)
+venv/
+.venv/
+env/
+__pycache__/
+
+# Ignore git history (Huge)
+.git/
+.gitignore
+
+# Ignore Docker metadata
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Ignore environment secrets
+.env
+
+# Ignore build artifacts
+build/
+dist/
+*.pyc
+*.egg-info/
