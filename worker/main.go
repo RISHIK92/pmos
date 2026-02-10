@@ -31,11 +31,9 @@ var ctx = context.Background()
 
 func main() {
 	redisArr := getEnv("REDIS_HOST", "localhost") + ":" + getEnv("REDIS_PORT", "6379")
-	redisPassword := getEnv("REDIS_PASSWORD", "securepassword")
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr: redisArr,
-		Password: redisPassword,
 		DB: 0,
 	})
 	if err := rdb.Ping(ctx).Err(); err != nil {

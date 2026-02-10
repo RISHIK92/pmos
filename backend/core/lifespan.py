@@ -6,8 +6,18 @@ from .firebase import initialize_firebase
 import chromadb
 
 db = Prisma()
-redis = Redis(host=os.getenv("REDIS_HOST", "localhost"), port=int(os.getenv("REDIS_PORT", 6379)), db=0, password=os.getenv("REDIS_PASSWORD"), decode_responses=True)
-chroma_client = chromadb.HttpClient(host=os.getenv("CHROMA_HOST", "localhost"), port=int(os.getenv("CHROMA_PORT", 8001)))
+
+redis = Redis(
+    host=os.getenv("REDIS_HOST", "localhost"),
+    port=int(os.getenv("REDIS_PORT", 6379)),
+    db=0,
+    decode_responses=True
+)
+
+chroma_client = chromadb.HttpClient(
+    host=os.getenv("CHROMA_HOST", "localhost"), 
+    port=int(os.getenv("CHROMA_PORT", 8001))
+)
 
 @asynccontextmanager
 async def lifespan(app):
