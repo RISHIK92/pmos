@@ -46,7 +46,7 @@ jobs:
           username: root
           key: ${{ secrets.DROPLET_SSH_KEY }}
           source: "./docker-compose.prod.yml"
-          target: "/opt/pmos/docker-compose.yml"
+          target: "/opt/pmos/"
 
       - name: Deploy to DigitalOcean
         uses: appleboy/ssh-action@v1.0.3
@@ -59,6 +59,8 @@ jobs:
 
             echo "Starting Deployment..."
             cd /opt/pmos
+
+            mv docker-compose.prod.yml docker-compose.yml
 
             docker compose pull
 
