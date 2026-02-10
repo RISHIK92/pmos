@@ -1,7 +1,7 @@
+langchain-voyageai
 python-multipart
-faiss-cpu
-sentence-transformers
 voyageai
+faiss-cpu
 chromadb==1.4.1
 fastapi==0.128.5
 firebase_admin==7.1.0
@@ -10,7 +10,6 @@ langchain_community==0.4.1
 langchain_core==1.2.9
 langchain_google_genai==4.2.0
 langchain_groq==1.1.2
-langchain_huggingface==1.2.0
 langgraph==1.0.8
 pydantic==2.12.5
 redis==7.1.0

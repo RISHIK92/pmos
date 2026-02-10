@@ -2,17 +2,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    python3-dev \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY . /app
 
-RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir uv
 RUN pip install --no-cache-dir -r requirements.txt
+
+RUN apt-get update && apt-get install -y \
+    libatomic1 \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN python -m prisma generate
 

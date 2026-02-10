@@ -1,7 +1,8 @@
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_voyageai import VoyageAIEmbeddings
 from langchain_core.tools import BaseTool
 from typing import List, Dict
+import os
 
 # Import your tool lists
 from app.agents.tools import ALL_TOOLS
@@ -15,21 +16,25 @@ class ToolRetriever:
 
     def _build_index(self):
         """
-        Converts tool descriptions into vectors.
-        Format: "tool_name: tool_description"
+        Converts tool descriptions into vectors using Voyage AI API.
         """
-        print(f"⚙️ Indexing {len(self.tools)} tools...")
-        tool_texts = [f"{t.name}: {t.description}" for t in self.tools]
+        print(f"⚙️ Indexing {len(self.tools)} tools with Voyage AI...")
         
-        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        tool_texts = [f"{t.name}: {t.description}" for t in self.tools]
         metadatas = [{"tool_name": t.name} for t in self.tools]
+        
+        voyage_api_key = os.getenv("CHROMA_VOYAGE_API_KEY") or os.getenv("VOYAGE_API_KEY")
+        embeddings = VoyageAIEmbeddings(
+            voyage_api_key=voyage_api_key,
+            model="voyage-3"
+        )
         
         self.vector_store = FAISS.from_texts(
             texts=tool_texts,
             embedding=embeddings,
             metadatas=metadatas
         )
-        print("✅ Tool Indexing Complete.")
+        print("✅ Tool Indexing Complete (Zero-Weight).")
 
     def query(self, user_query: str, k: int = 5) -> List[BaseTool]:
         """
