@@ -70,7 +70,7 @@ services:
       - "traefik.docker.network=nativex-net"
     restart: always
     env_file:
-      - ./env.backend
+      - ./.env.backend
     environment:
       - DATABASE_URL=postgresql://admin:securepassword@db:5432/mydb
       - REDIS_URL=redis://:securepassword@redis:6379/0
@@ -90,7 +90,7 @@ services:
     volumes:
       - ./secrets/pmos/serviceAccountKey.json:/root/serviceAccountKey.json
     env_file:
-      - ./env.worker
+      - ./.env.worker
     environment:
       - DATABASE_URL=postgresql://admin:securepassword@db:5432/mydb
       - REDIS_URL=redis://:securepassword@redis:6379/0
