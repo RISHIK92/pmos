@@ -88,7 +88,7 @@ services:
     image: rishik92/pmos-worker:latest
     restart: always
     volumes:
-      - ./secrets/pmos/serviceAccountKey.json:/root/serviceAccountKey.json
+      - ./serviceAccountKey.json:/root/serviceAccountKey.json
     env_file:
       - ./.env.worker
     environment:
