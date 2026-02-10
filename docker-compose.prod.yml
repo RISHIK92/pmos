@@ -25,16 +25,7 @@ services:
   redis:
     image: redis:alpine
     restart: always
-    command:
-      - redis-server
-      - "--appendonly"
-      - "yes"
-      - "--requirepass"
-      - "securepassword"
-      - "--maxmemory"
-      - "256mb"
-      - "--maxmemory-policy"
-      - "allkeys-lru"
+    command: redis-server --appendonly yes --requirepass securepassword
     volumes:
       - redisdata:/data
     networks:
@@ -74,6 +65,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://admin:securepassword@db:5432/mydb
       - REDIS_URL=redis://:securepassword@redis:6379/0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=securepassword
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
     depends_on:
