@@ -364,7 +364,6 @@ export default function FinanceScreen() {
     setEditingAccount(acc);
     setEditAccName(acc.name);
     setEditAccNumber(acc.accountNumber);
-    // Pre-fill with CURRENT computed balance
     setEditAccBalance(acc.balance.toString());
     setEditAccColor(acc.color);
     setEditAccModalVisible(true);
@@ -442,8 +441,6 @@ export default function FinanceScreen() {
     [visibleData],
   );
 
-  // Calculate number of dots based on logic
-  // 1 dot per 2 items, up to 6 dots max
   const numDots = useMemo(
     () =>
       pendingList.length < 2
@@ -515,7 +512,6 @@ export default function FinanceScreen() {
       if (!user) return;
       const token = await user.getIdToken();
 
-      // 1. Delete from pending backend
       await fetch(`${backendUrl}/finance/pending/${item.id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
