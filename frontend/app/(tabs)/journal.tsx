@@ -17,7 +17,9 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { auth } from "../../lib/firebase";
 
 const backendUrl =
-  Platform.OS === "android" ? "http://10.7.19.2:8000" : "http://localhost:8000";
+  Platform.OS === "android"
+    ? "https://backend.pmos.rishik.codes"
+    : "http://localhost:8000";
 
 export default function JournalScreen() {
   const { toggleSidebar } = useContext(SidebarContext);

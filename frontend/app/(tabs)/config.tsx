@@ -178,7 +178,7 @@ export default function ConfigScreen() {
 
   const backendUrl =
     Platform.OS === "android"
-      ? "http://10.7.19.2:8000"
+      ? "https://backend.pmos.rishik.codes"
       : "http://localhost:8000";
 
   const handleGitHubConnect = async () => {

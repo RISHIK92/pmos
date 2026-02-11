@@ -1,7 +1,7 @@
 import { auth } from "@/lib/firebase";
 
 // Hardcoded for now, should be env
-const BACKEND_URL = "http://10.7.19.2:8000";
+const BACKEND_URL = "https://backend.pmos.rishik.codes";
 
 export const SleepManager = {
   async startSleep(): Promise<{ success: boolean; message: string }> {

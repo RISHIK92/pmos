@@ -127,7 +127,7 @@ export default function ChatScreen() {
 
           const backendUrl =
             Platform.OS === "android"
-              ? "http://10.7.19.2:8000"
+              ? "https://backend.pmos.rishik.codes"
               : "http://localhost:8000";
 
           const data = await fetch(`${backendUrl}/auth/register`, {
@@ -153,7 +153,7 @@ export default function ChatScreen() {
       setLoadingHistory(true);
       const backendUrl =
         Platform.OS === "android"
-          ? "http://10.7.19.2:8000"
+          ? "https://backend.pmos.rishik.codes"
           : "http://localhost:8000";
       let url = `${backendUrl}/query/history?limit=7`;
       if (cursor) url += `&cursor=${cursor}`;
@@ -275,7 +275,7 @@ export default function ChatScreen() {
 
         const backendUrl =
           Platform.OS === "android"
-            ? "http://10.7.19.2:8000"
+            ? "https://backend.pmos.rishik.codes"
             : "http://localhost:8000";
 
         const response = await fetch(`${backendUrl}/query/voice`, {
@@ -349,7 +349,7 @@ export default function ChatScreen() {
       const token = await user.getIdToken();
       const backendUrl =
         Platform.OS === "android"
-          ? "http://10.7.19.2:8000"
+          ? "https://backend.pmos.rishik.codes"
           : "http://localhost:8000";
 
       console.log("Sending query (SSE) with time:", new Date().toString());

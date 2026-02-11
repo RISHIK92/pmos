@@ -68,7 +68,7 @@ const backgroundTask = async (taskDataArguments: any) => {
         return;
       }
 
-      const backendUrl = "http://10.7.19.2:8000";
+      const backendUrl = "https://backend.pmos.rishik.codes";
 
       const response = await fetch(`${backendUrl}/finance/parse-sms`, {
         method: "POST",
