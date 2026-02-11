@@ -498,7 +498,7 @@ export default function ChatScreen() {
     if (isSystem) {
       if (item.isThinking) {
         return (
-          <View style={{ marginLeft: 20, marginBottom: 8 }}>
+          <View style={{ marginLeft: 4, marginBottom: 8 }}>
             <ThinkingBubble status={item.text} />
           </View>
         );
