@@ -10,7 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   ActivityIndicator,
-  ScrollView,
+ScrollView,
 } from "react-native";
 import { SidebarContext } from "./_layout";
 import { IconSymbol } from "@/components/ui/icon-symbol";

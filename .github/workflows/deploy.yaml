@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "backend/**"
+      - "worker/**"
+      - "docker-compose.prod.yml"
+      - ".github/workflows/**"
 
 jobs:
   build:
