@@ -88,7 +88,7 @@ export default function AssistantOverlay() {
         clearInterval(silenceTimerRef.current);
       }
       if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync().catch(console.error);
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
       }
     };
   }, []);
@@ -118,7 +118,7 @@ export default function AssistantOverlay() {
     if (!user) {
       if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
       if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync().catch(console.error);
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
         recordingRef.current = null;
       }
       setVisible(false);
@@ -193,14 +193,11 @@ export default function AssistantOverlay() {
               setThinkingStatus(null);
               break;
           }
-        } catch (e) {
-          console.error("Error parsing SSE data", e);
-        }
+        } catch (e) {}
       });
 
       // @ts-ignore
       es.addEventListener("error", (event: any) => {
-        console.error("SSE Error:", event);
         setIsProcessingText(false);
         if (event.type === "error" || event.message) {
           // connection error
@@ -209,7 +206,6 @@ export default function AssistantOverlay() {
         es.close();
       });
     } catch (error) {
-      console.error("Failed to start SSE", error);
       setIsProcessingText(false);
       setResponse("Failed to start connection.");
     }
@@ -339,7 +335,6 @@ export default function AssistantOverlay() {
         }
       }, 500);
     } catch (err) {
-      console.error("Failed to start recording", err);
       Alert.alert(
         "Recording Error",
         "Failed to start recording. Please try again.",
@@ -400,20 +395,17 @@ export default function AssistantOverlay() {
             handleUserIntent(result);
           }
         } catch (error) {
-          console.error("Failed to process voice", error);
           setIsProcessingVoice(false);
           Alert.alert("Processing Error", "Failed to process voice input.");
         }
       }
-    } catch (error) {
-      console.error("Failed to stop recording", error);
-    }
+    } catch (error) {}
   };
 
   const handleOpenApp = () => {
     if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
     if (recordingRef.current) {
-      recordingRef.current.stopAndUnloadAsync().catch(console.error);
+      recordingRef.current.stopAndUnloadAsync().catch(() => {});
       recordingRef.current = null;
     }
     setVisible(false);
@@ -435,7 +427,7 @@ export default function AssistantOverlay() {
   const handleDismiss = () => {
     if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
     if (recordingRef.current) {
-      recordingRef.current.stopAndUnloadAsync().catch(console.error);
+      recordingRef.current.stopAndUnloadAsync().catch(() => {});
       recordingRef.current = null;
     }
     setVisible(false);

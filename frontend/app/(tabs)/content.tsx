@@ -230,7 +230,7 @@ export default function ContentScreen() {
         setSocials(updatedSocials);
       }
     } catch (e) {
-      console.error(e);
+
     } finally {
       setIsLoading(false);
     }

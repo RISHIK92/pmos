@@ -98,29 +98,20 @@ async def action_mapping_node(state: AgentState):
     messages = state["messages"]
     last_message = messages[-1]
     
-    # 1. Parse Instruction
-    # Format: "||DELEGATE||: FINANCE SYS - Log 500 rupees"
     raw_text = last_message.content.replace("||DELEGATE||:", "").strip()
-    
-    # 2. KEYWORD EXPANSION (The Bridge between Brain and Hand)
-    # We map the System Name to specific keywords found in your tool definitions
+    print(f"🤖 Kimi received instruction: '{raw_text}'")
+
     search_query = raw_text
     
     domain_map = {
         "MEMORY & SEARCH SYS": "search_memory save_memory retrieve remember fact context web internet",
-        
         "PRODUCTIVITY SYS": "create_task update_task delete_task get_tasks section list alarm timer deadline schedule remind",
-        
         "HEALTH & BIOLOGY SYS": "log_water log_meal get_nutrition calories kcal food eat drink log_period cycle menstruation health dashboard sleep steps",
-        
         "FINANCE SYS": "add_transaction expense income money cost paid rupees bank account balance create_account",
-        
         "DEVICE & COMMS SYS": "open_app launch play_media music song pause next call_contact phone send_whatsapp sms message text",
-        
         "LIFESTYLE & GROWTH SYS": "save_journal diary write entry add_content movie book watch read github dev profile stats repo"
     }
     
-    # Check which system was called and inject its keywords
     active_domain = "General"
     for domain, keywords in domain_map.items():
         if domain in raw_text:
@@ -129,31 +120,25 @@ async def action_mapping_node(state: AgentState):
             print(f"🔹 Unpacking {domain} -> Added keywords")
             break
 
-    print(f"🤖 Kimi Searching Tools for: '{search_query}'")
+    print(f"🔎 Searching Tools for: '{search_query}'")
 
-    # 3. Retrieve Tools (Increased k to ensure we catch related tools)
     relevant_tools = tool_retriever.query(search_query, k=10)
     
-    # 4. Safety Injection (Force critical tools if missing)
-    current_names = {t.name for t in relevant_tools}
+    current_names = {t.name for t in relevant_tools if t}
     
-    # If dealing with tasks, ensure we can create sections
     if "create_task" in current_names and "create_section" not in current_names:
          relevant_tools.append(tool_retriever.tool_map.get("create_section"))
          
-    # If dealing with health, ensure dashboard is available for context
     if "log_meal" in current_names and "get_health_dashboard" not in current_names:
         relevant_tools.append(tool_retriever.tool_map.get("get_health_dashboard"))
 
-    # Always allow search transfer
     if "transfer_to_search" not in current_names:
         relevant_tools.append(tool_retriever.tool_map.get("transfer_to_search"))
 
-    # Filter None matches
     relevant_tools = [t for t in relevant_tools if t]
 
-    # 5. Bind and Invoke Kimi
-    # We force tool_choice="auto" so Kimi feels free to pick the right one
+    print(f"🔧 Kimi Binding Tools: {[t.name for t in relevant_tools]}")
+
     llm_with_tools = tool_llm.bind_tools(relevant_tools, tool_choice="auto")
     
     kimi_prompt = f"""
@@ -168,54 +153,9 @@ async def action_mapping_node(state: AgentState):
     3. If multiple actions are needed (e.g., 'Save Journal' AND 'Log Emotion'), call both.
     """
     
-    response = await llm_with_tools.ainvoke([HumanMessage(content=kimi_prompt)])
-    return {"messages": [response]}
-    """
-    Kimi: Receives the '||DELEGATE||' instruction and maps it to a specific Tool Call.
-    """
-    messages = state["messages"]
-    last_message = messages[-1]
-    
-    # Extract the instruction (remove the prefix)
-    instruction = last_message.content.replace("||DELEGATE||:", "").strip()
-    print(f"🤖 Kimi received instruction: '{instruction}'")
-
-    # Dynamic Tool Retrieval based on the specific instruction
-    relevant_tools = tool_retriever.query(instruction, k=5)
-    
-    # Safety Injections (same logic as before)
-    current_names = {t.name for t in relevant_tools}
-    if "create_task" in current_names and "save_memory" not in current_names:
-        relevant_tools.append(tool_retriever.tool_map.get("save_memory"))
-    if "save_memory" in current_names and "create_task" not in current_names:
-        relevant_tools.append(tool_retriever.tool_map.get("create_task"))
-    if "transfer_to_search" not in current_names:
-        relevant_tools.append(tool_retriever.tool_map.get("transfer_to_search"))
-
-    # Remove None values if retrieval failed
-    relevant_tools = [t for t in relevant_tools if t]
-    
-    print(f"🔧 Kimi Binding Tools: {[t.name for t in relevant_tools]}")
-
-    # Bind tools to Kimi
-    llm_with_tools = tool_llm.bind_tools(relevant_tools, tool_choice="auto")
-    
-    # Kimi just needs to hear the instruction
-    kimi_prompt = f"""
-    You are the Action Engine. 
-    The "Brain" has requested this action: "{instruction}"
-    
-    Map this request to the correct tool call. 
-    If multiple tools are needed (e.g. Save Memory AND Set Alarm), call them all.
-    """
-    
     # We send a fresh message to Kimi to avoid polluting it with the whole Gemini chat history
     response = await llm_with_tools.ainvoke([HumanMessage(content=kimi_prompt)])
     
-    # We return this response so it appends to the history
-    # The 'should_continue_action' edge will see the tool_calls in this response
-    print(f"🤖 Action Mapping Node Output: {response.content}")
-    print(f"🔧 Tool Calls: {response.tool_calls}")
     return {"messages": [response]}
 
 async def search_node(state: AgentState):

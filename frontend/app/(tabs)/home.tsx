@@ -53,30 +53,12 @@ type Message = {
 const INITIAL_NOTIFICATIONS = [
   {
     id: "1",
-    title: "System Update",
-    message: "PMOS v2.1 is now available. Tap to install.",
+    title: "Hlo there...",
+    message: "Welcome to DEX",
     time: "2m ago",
     read: false,
     icon: "hardware-chip",
     color: "#00B894",
-  },
-  {
-    id: "2",
-    title: "New Task Assigned",
-    message: "Project 'Alpha' needs your review.",
-    time: "1h ago",
-    read: false,
-    icon: "checkbox",
-    color: "#0984E3",
-  },
-  {
-    id: "3",
-    title: "Memory Optimized",
-    message: "Freed up 1.2GB of space automatically.",
-    time: "3h ago",
-    read: true,
-    icon: "flash",
-    color: "#FDCB6E",
   },
 ];
 
@@ -139,9 +121,7 @@ export default function ChatScreen() {
             body: JSON.stringify({ fcmToken }), // Pass FCM Token here
           });
           console.log("Auth Sync:", await data.json());
-        } catch (err) {
-          console.error("Backend sync failed", err);
-        }
+        } catch (err) {}
       }
     });
 
@@ -199,7 +179,6 @@ export default function ChatScreen() {
         }
       }
     } catch (error) {
-      console.error("Failed to fetch history", error);
     } finally {
       setLoadingHistory(false);
     }
@@ -240,9 +219,7 @@ export default function ChatScreen() {
           ],
         );
       }
-    } catch (err) {
-      console.error("Failed to start recording", err);
-    }
+    } catch (err) {}
   };
 
   const stopRecording = async () => {
@@ -294,7 +271,6 @@ export default function ChatScreen() {
         }
       }
     } catch (error) {
-      console.error("Failed to stop recording", error);
       setIsProcessingVoice(false);
       processingScale.value = withSpring(1);
     }
@@ -341,9 +317,7 @@ export default function ChatScreen() {
         setMessages((prev) => [...prev, systemMessage]);
         return;
       }
-    } catch (e) {
-      console.error("Intent processing failed, falling back to AI", e);
-    }
+    } catch (e) {}
 
     try {
       const token = await user.getIdToken();
@@ -453,14 +427,11 @@ export default function ChatScreen() {
               );
               break;
           }
-        } catch (e) {
-          console.error("Error parsing SSE data", e);
-        }
+        } catch (e) {}
       });
 
       // @ts-ignore
       es.addEventListener("error", (event: any) => {
-        console.error("SSE Error:", event);
         setIsTyping(false);
         if (event.type === "error" || event.message) {
           updateLastMessage((prev) => prev + "\n❌ Connection failed.");
@@ -468,7 +439,6 @@ export default function ChatScreen() {
         es.close();
       });
     } catch (error) {
-      console.error("Failed to send message", error);
       setIsTyping(false);
       const errorMessage: Message = {
         id: (Date.now() + 2).toString(),

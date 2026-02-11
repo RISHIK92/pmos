@@ -141,9 +141,7 @@ export default function ConfigScreen() {
         githubUser = data.githubUsername;
         slackTeam = data.slackTeamName;
       }
-    } catch (e) {
-      console.error("Failed to fetch integrations", e);
-    }
+    } catch (e) {}
 
     setIntegrations((prev) =>
       prev.map((item) => {

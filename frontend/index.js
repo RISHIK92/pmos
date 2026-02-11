@@ -76,9 +76,7 @@ const SmsHeadlessTask = async (taskData) => {
     } else {
       console.log("⚠️ Backend rejected SMS:", response.status);
     }
-  } catch (error) {
-    console.error("❌ Failed to process SMS in Headless Task", error);
-  }
+  } catch (error) {}
 };
 
 AppRegistry.registerHeadlessTask("SmsHeadlessTask", () => SmsHeadlessTask);
